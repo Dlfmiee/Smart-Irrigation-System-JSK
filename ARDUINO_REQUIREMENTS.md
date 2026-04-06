@@ -21,6 +21,7 @@ Install these libraries via the **Library Manager** (Tools > Manage Libraries):
 | **Time** | (Built-in) | Real-time scheduling via NTP |
 | **HTTPClient** | (Built-in) | Sending data to Google Sheets |
 | **WiFiClientSecure** | (Built-in) | Secure HTTPS/SSL for Google |
+| **esp_task_wdt** | (Built-in) | Hardware Watchdog (Auto-Reboot) |
 
 ## 3. Deployment Checklist (Which Code Goes Where?)
 
