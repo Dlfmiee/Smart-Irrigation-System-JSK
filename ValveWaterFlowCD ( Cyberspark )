@@ -8,6 +8,7 @@
 #include <time.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
@@ -135,12 +136,17 @@ void setup() {
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
   
+  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  esp_task_wdt_init(30, true);
+  esp_task_wdt_add(NULL);
+
   timer.setInterval(100L, processMotorTiming);
-  timer.setInterval(15000L, checkSchedule);
+  timer.setInterval(60000L, checkSchedule);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {
   Blynk.run();
   timer.run();
+  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 }

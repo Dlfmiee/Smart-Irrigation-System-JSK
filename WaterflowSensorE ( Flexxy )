@@ -6,6 +6,7 @@
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
@@ -17,6 +18,7 @@ char pass[] = "datangsurau";
 
 volatile int pulseCount = 0;
 float flowRate = 0;
+float lastFlowRate = -1; // For delta logging
 
 BlynkTimer timer;
 
@@ -37,7 +39,14 @@ void sendFlowRate() {
   Serial.print(flowRate, 3);
   Serial.println(" L/sec");
 
-  Blynk.virtualWrite(V0, flowRate);
+  // Delta check: only send to Blynk if value changed by more than 0.05
+  if (abs(flowRate - lastFlowRate) > 0.05) {
+    Blynk.virtualWrite(V0, flowRate);
+    lastFlowRate = flowRate;
+    Serial.println("[BLYNK] Sent flow rate.");
+  } else {
+    Serial.println("[DELTA] No change, skipping Blynk.");
+  }
 }
 
 void logToGoogleSheets() {
@@ -74,11 +83,16 @@ void setup() {
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
-  timer.setInterval(1000L, sendFlowRate);
+  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  esp_task_wdt_init(30, true);
+  esp_task_wdt_add(NULL);
+
+  timer.setInterval(60000L, sendFlowRate);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {
   Blynk.run();
   timer.run();
+  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 }

@@ -8,6 +8,7 @@
 #include <time.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
 
@@ -21,11 +22,21 @@ char pass[] = "datangsurau";
 BlynkTimer timer;
 bool rainLockout = false;
 int lastResetDay = -1;
+bool lastRainLockout = false; // For delta logging
+int lastRainValue = -1;       // For delta logging
 
 void readRainSensor()
 {
   int rainValue = analogRead(RAIN_SENSOR_PIN);
-  Blynk.virtualWrite(V9, rainValue);
+
+  // Delta check: only send raw value if it changed significantly
+  if (abs(rainValue - lastRainValue) > 100) {
+    Blynk.virtualWrite(V9, rainValue);
+    lastRainValue = rainValue;
+    Serial.println("[BLYNK] Sent rain value.");
+  } else {
+    Serial.println("[DELTA] Rain value unchanged, skipping V9.");
+  }
 
   // Rain threshold (adjust according to calibration)
   if (rainValue < 2000)   // Raining
@@ -108,8 +119,12 @@ void setup()
   // Set Timezone Malaysia (GMT+8)
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
 
-  timer.setInterval(2000L, readRainSensor);
-  timer.setInterval(30000L, checkMidnightReset); // Check schedule safely
+  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  esp_task_wdt_init(30, true);
+  esp_task_wdt_add(NULL);
+
+  timer.setInterval(60000L, readRainSensor);
+  timer.setInterval(30000L, checkMidnightReset);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
@@ -117,4 +132,5 @@ void loop()
 {
   Blynk.run();
   timer.run();
+  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 }

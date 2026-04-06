@@ -6,6 +6,7 @@
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
@@ -28,6 +29,7 @@ bool soil2Dry;
 bool soil3Dry;
 
 BlynkTimer timer;
+int lastSoilAvg = -1; // For delta logging
 
 void sendMoistureToBlynk() {
   int soilValue1 = analogRead(SOIL1);
@@ -50,8 +52,14 @@ void sendMoistureToBlynk() {
   Serial.print(" | S3: "); Serial.print(soilValue3);
   Serial.println();
 
-  // Send to Blynk
-  Blynk.virtualWrite(V7, soilAverage);
+  // Send to Blynk (only if changed by more than 50 ADC units)
+  if (abs(soilAverage - lastSoilAvg) > 50) {
+    Blynk.virtualWrite(V7, soilAverage);
+    lastSoilAvg = soilAverage;
+    Serial.println("[BLYNK] Sent moisture.");
+  } else {
+    Serial.println("[DELTA] No change, skipping Blynk.");
+  }
 
   // Composite Rain Lockout: If soil is extremely wet, lock out system
   if (soilAverage < wetThreshold) {
@@ -95,11 +103,17 @@ void setup() {
   pinMode(SOIL3, INPUT);
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
-  timer.setInterval(2000L, sendMoistureToBlynk);
+
+  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  esp_task_wdt_init(30, true);
+  esp_task_wdt_add(NULL);
+
+  timer.setInterval(60000L, sendMoistureToBlynk);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {
   Blynk.run();
   timer.run();
+  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 }

@@ -6,6 +6,7 @@
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
@@ -22,12 +23,20 @@ unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 150;
 
 BlynkTimer timer;
+float lastRainfall = -1; // For delta logging
 
 // Hantar hanya rainfall
 void sendData() {
   float rainfall = tipCount * RAIN_PER_TIP;
 
-  Blynk.virtualWrite(V8, rainfall);
+  // Delta check: only send if changed by more than 0.1mm
+  if (abs(rainfall - lastRainfall) > 0.1) {
+    Blynk.virtualWrite(V8, rainfall);
+    lastRainfall = rainfall;
+    Serial.println("[BLYNK] Sent rainfall.");
+  } else {
+    Serial.println("[DELTA] No change, skipping Blynk.");
+  }
 
   Serial.print("Rainfall: ");
   Serial.print(rainfall);
@@ -70,13 +79,18 @@ void setup() {
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
-  timer.setInterval(2000L, sendData);
+  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  esp_task_wdt_init(30, true);
+  esp_task_wdt_add(NULL);
+
+  timer.setInterval(60000L, sendData);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {
   Blynk.run();
   timer.run();
+  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 
   bool currentState = digitalRead(REED_PIN);
 

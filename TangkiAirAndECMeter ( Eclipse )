@@ -20,6 +20,7 @@ char pass[] = "datangsurau";
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
@@ -30,6 +31,8 @@ float tdsValue = 0;
 float ecValue = 0;
 
 BlynkTimer timer;
+float lastEcValue = -1;   // For delta logging
+int lastFloatStatus = -1; // For delta logging
 
 /************ FUNCTION ************/
 void sendToBlynk() {
@@ -53,9 +56,20 @@ void sendToBlynk() {
   Serial.print(ecValue, 2);
   Serial.println(" ms/cm");
 
-  // ===== SEND TO BLYNK =====
-  Blynk.virtualWrite(V1, floatStatus); // Float switch
-  Blynk.virtualWrite(V2, ecValue);     // EC
+  // ===== SEND TO BLYNK (Delta Check) =====
+  if (lastFloatStatus != floatStatus) {
+    Blynk.virtualWrite(V1, floatStatus);
+    lastFloatStatus = floatStatus;
+    Serial.println("[BLYNK] Sent float status.");
+  }
+  if (abs(ecValue - lastEcValue) > 0.05) {
+    Blynk.virtualWrite(V2, ecValue);
+    lastEcValue = ecValue;
+    Serial.println("[BLYNK] Sent EC value.");
+  }
+  if (lastFloatStatus == floatStatus && abs(ecValue - lastEcValue) <= 0.05) {
+    Serial.println("[DELTA] No change, skipping Blynk.");
+  }
 
   // ===== HEARTBEAT LED =====
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
@@ -98,7 +112,11 @@ void setup() {
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
-  timer.setInterval(5000L, sendToBlynk);
+  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  esp_task_wdt_init(30, true);
+  esp_task_wdt_add(NULL);
+
+  timer.setInterval(60000L, sendToBlynk);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 
   Serial.println("SYSTEM START - ESP32 + BLYNK");
@@ -107,4 +125,5 @@ void setup() {
 void loop() {
   Blynk.run();
   timer.run();
+  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 }
