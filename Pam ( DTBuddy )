@@ -1,1 +1,99 @@
- 
+ #define BLYNK_TEMPLATE_ID "TMPL60F-6p8Cm"
+#define BLYNK_TEMPLATE_NAME "ESP32"
+#define BLYNK_PRINT Serial
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+/* --- Blynk Credentials --- */
+char auth[] = "VQ3Vdt1Agq7VuZDADp2X1ntE35PnOLCB"; // Replace with your relay ESP32 token
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
+
+/* --- Pins --- */
+const int relayPin = 26;   // ACTIVE-LOW
+const int ledPin   = 27;   // Power LED
+
+/* --- Soil thresholds --- */
+#define DRY_ON   2600
+#define WET_OFF  2300
+
+/* --- Relay timing --- */
+const unsigned long relayDuration = 150000UL; // 2 mins 30 sec in milliseconds
+unsigned long relayStartTime = 0;             // When relay was turned ON
+
+/* --- Variables --- */
+int soilAverage = 0;
+bool soilDry = false;
+bool relayState = false;        // Current relay state
+bool manualOverride = false;    // Manual override active
+bool soilReceived = false;      // First soil reading received
+
+/* --- Setup --- */
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(relayPin, OUTPUT);
+  pinMode(ledPin, OUTPUT);
+
+  digitalWrite(ledPin, HIGH);   // Power LED ON
+  digitalWrite(relayPin, LOW);  // Relay ON at startup
+  relayState = true;
+  relayStartTime = millis();    // Start the timer
+
+  Serial.println("Connecting to Blynk...");
+  Blynk.begin(auth, ssid, pass);
+  Serial.println("Blynk connected!");
+}
+
+/* --- Receive soil average from Soil ESP32 --- */
+BLYNK_WRITE(V1) {
+  soilAverage = param.asInt();
+  soilReceived = true;
+
+  Serial.print("Received soil average: ");
+  Serial.println(soilAverage);
+
+  // Hysteresis logic
+  if (!soilDry && soilAverage > DRY_ON) soilDry = true;
+  else if (soilDry && soilAverage < WET_OFF) soilDry = false;
+}
+
+/* --- Manual override button on Blynk --- */
+BLYNK_WRITE(V0) { // Manual button
+  int buttonState = param.asInt(); // 1 = ON, 0 = OFF
+  manualOverride = true;           // Enable manual override
+  relayState = (buttonState == 1);
+  digitalWrite(relayPin, relayState ? LOW : HIGH); // ACTIVE-LOW
+  relayStartTime = millis();       // Reset timer
+
+  Serial.print("Manual override: Relay ");
+  Serial.println(relayState ? "ON" : "OFF");
+}
+
+/* --- Main Loop --- */
+void loop() {
+  Blynk.run();
+
+  unsigned long currentMillis = millis();
+
+  // Automatic control only if no manual override
+  if (!manualOverride && soilReceived) {
+    if (soilDry && !relayState) {
+      relayState = true;
+      digitalWrite(relayPin, LOW);      // Relay ON
+      relayStartTime = currentMillis;   // Start timer
+      Serial.println("AUTO: Soil dry → Relay ON");
+    }
+  }
+
+  // Check if relay should turn OFF after duration
+  if (relayState && (currentMillis - relayStartTime >= relayDuration)) {
+    relayState = false;
+    digitalWrite(relayPin, HIGH);       // Relay OFF
+    Serial.println("Relay timer expired → Relay OFF");
+
+    // Reset manual override if it was active
+    if (manualOverride) manualOverride = false;
+  }
+}
