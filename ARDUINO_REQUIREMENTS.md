@@ -1,6 +1,6 @@
 # Arduino IDE Setup & Requirements
 
-This document outlines everything you need to successfully compile and upload the smart irrigation code to your 8 ESP32 modules.
+This document outlines everything you need to successfully compile and upload the smart irrigation code to your **8 ESP32 modules**.
 
 ## 1. Board Support (ESP32)
 You must install the ESP32 board package by Espressif:
@@ -16,25 +16,37 @@ Install these libraries via the **Library Manager** (Tools > Manage Libraries):
 
 | Library Name | Author | Purpose |
 | :--- | :--- | :--- |
-| **Blynk** | Volodymyr Shymanskyy | Cloud connectivity and Dashboard |
-| **WiFi** | (Built-in) | Network connectivity |
-| **Time** | (Built-in) | NTP Time synchronization |
+| **Blynk** | Volodymyr Shymanskyy| Cloud connectivity & Mobile App |
+| **WiFi** | (Built-in) | ESP32 Network connectivity |
+| **Time** | (Built-in) | Real-time scheduling via NTP |
 
-## 3. Upload Settings
-When uploading to your ESP32 boards, use these settings under the **Tools** menu:
-*   **Board**: "DOIT ESP32 DEVKIT V1" (or your specific ESP32 model)
-*   **Upload Speed**: 921600 (or 115200 if you have connection issues)
+## 3. Deployment Checklist (Which Code Goes Where?)
+
+| Node No. | File Name | Target Hardware |
+| :--- | :--- | :--- |
+| 1 | **Flexxy (Flow E)** | ESP32 + Flow Sensor E |
+| 2 | **Eclipse (Tank/EC)** | ESP32 + Float Switch + EC Meter |
+| 3 | **Cyberspark (Vaulve CD)**| ESP32 + 2x Relays (Water) |
+| 4 | **ALTF4 (Valve AB)** | ESP32 + 2x Relays (Fertilizer) |
+| 5 | **Syahdiq (Moisture)** | ESP32 + 3x Soil Sensors |
+| 6 | **Abdul (Rain Gauge)** | ESP32 + Tipping Bucket Gauge |
+| 7 | **Aieman (Rain Sensor)** | ESP32 + Analog Rain Sensor |
+| 8 | **DT Buddy (Pump)** | ESP32 + Main Pump Relay |
+
+## 4. Upload Settings
+When uploading, use these settings under the **Tools** menu:
+*   **Board**: "DOIT ESP32 DEVKIT V1" 
+*   **Upload Speed**: 921600 (Fast) or 115200 (Stable)
 *   **Flash Frequency**: 80MHz
-*   **Core Debug Level**: None
+*   **Partition Scheme**: Default 4MB with SPIFFS
 
-## 4. Common Credentials (Pre-Configured)
-All your files are already updated with these settings:
+## 5. Pre-Configured Credentials
+The code is already pre-loaded with these settings:
 *   **WiFi SSID**: `SurauAl-Irfan`
 *   **WiFi Password**: `datangsurau`
-*   **Blynk Token**: `MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd`
 *   **Timezone**: GMT+8 (Malaysia)
 
-## 5. Troubleshooting
-*   **"BlynkSimpleEsp32.h: No such file"**: You haven't installed the Blynk library yet.
-*   **Connection Failed**: Ensure your ESP32 is in "Boot Mode" by holding the **BOOT** button while the IDE says "Connecting...".
-*   **Time mismatch**: Ensure your WiFi has internet access so the ESP32 can fetch the current time from `pool.ntp.org`.
+## 6. Troubleshooting
+- **"BlynkSimpleEsp32.h: No such file"**: Install the **Blynk** library in the Library Manager.
+- **Connection Failed**: Hold the **BOOT** button on the ESP32 while it says "Connecting..." until the percentage progress appears.
+- **Node disconnected**: Ensure your Surau WiFi signal is strong enough at the installation site.

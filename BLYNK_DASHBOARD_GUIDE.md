@@ -21,24 +21,44 @@ Go to **Developer Zone > Templates > ESP32 WIFI > Datastreams** and add the foll
 | **V11** | Pump Status | Integer | 0/1 | 1 = ON, 0 = OFF (DT Buddy) |
 | **V12** | Rain Lockout | Integer | 0/1 | 1 = LOCK (Rainy Day), 0 = READY |
 
-## 2. Recommended Widget Setup
-For the most premium-looking dashboard, we recommend these widgets:
+## 2. Premium Widget Setup
+For a professional, high-end dashboard, we recommend the following layout using the **Blynk Mobile App**:
 
-### **Main Control Panel**
-- **4 LED Widgets**: Assign to **V3, V4, V5, V6** to see which valves are moving.
-- **1 Styled Button**: Assign to **V11** (Set to "Display Only" or just use as a status light).
-- **1 LED Widget**: Assign to **V12** (Label: "Rain Lockout"). Color it Red when ON.
+### **A. Status Overview (Top Row)**
+- **LED (V12)**: Name: "SYSTEM STATUS". 
+  - *Color*: **RED** (#FF4B2B) when Lockout is ON.
+  - *Logic*: Shows if irrigation is paused due to rain.
+- **LED (V11)**: Name: "PUMP".
+  - *Color*: **CYAN** (#00D2FF) when Pump is running.
+- **Labeled Value (V1)**: Name: "TANK LEVEL". 
+  - *Display*: Shows "FULL" or "LOW".
 
-### **Sensor Readouts**
-- **Gauges**: Best for **V7** (Soil Moisture) and **V2** (EC Meter).
-- **Labelled Values**: Great for **Flow Rate E (V0)**.
-- **Value Display**: Best for **V8** (Rainfall mm).
+### **B. Live Controls (Middle Row)**
+- **4x Styled Buttons (V3, V4, V5, V6)**: 
+  - Use "Push" mode for manual testing.
+  - *Colors*: 
+    - **Valve A & B (Fertilizer)**: **PURPLE** (#8E2DE2).
+    - **Valve C & D (Water)**: **BLUE** (#4facfe).
 
-### **Notifications (Automations)**
-The code is designed to trigger **Blynk Events** automatically. You should go to the "Events" tab in the Template and ensure these are allowed:
-1. `valve_opened`: Sent when a schedule starts.
-2. `pump_error`: Sent if Dry-Run protection (No Flow) is triggered.
+### **C. Environment Data (Bottom Row)**
+- **Gauge (V7)**: Name: "SOIL MOISTURE".
+  - *Range*: 0 to 4095.
+  - *Gradient*: Green (Wet) to Red (Dry).
+- **Gauge (V2)**: Name: "EC LEVEL".
+  - *Range*: 0 to 5.0.
+  - *Color*: **GOLD** (#FDC830).
+- **Chart (V8, V0)**: 
+  - Add a "SuperChart" to track **Daily Rainfall (V8)** and **Flow Rate E (V0)** over time.
 
-## 3. Important Notes
-- **V12** is the most important "Master Switch" (Global Rain Lockout). If it is logic `1`, the pump will refuse to start even if the schedule hits.
-- **V11** is the indicator for the Pump. If V11 is ON, the 120-second timer is currently running.
+## 3. Design Tips for a Stunning App
+1.  **Use Dark Mode**: Go to App Settings and enable **Dark Theme**.
+2.  **Add Labels**: Use "Headline" widgets to separate "CONTROLS" from "SENSORS".
+3.  **Color Unity**: Keep all water-related widgets Blue and fertilizer-related widgets Purple.
+4.  **Icons**: Use the "Droplet" icon for valves and "Cloud" icon for rain lockout.
+
+## 4. Important Operational Notes
+- **V12 (Rain Lockout)**: This is the global master switch. If you see this LED turned RED, the pump will **NOT** turn on. It will reset automatically at midnight.
+- **V11 (Pump Status)**: If the pump turns off suddenly after 15 seconds, check your **Flow Rate E (V0)**. This is the Dry-Run protection triggered by the code.
+
+---
+*Created for the Smart-Irrigation-System-JSK Project.*
