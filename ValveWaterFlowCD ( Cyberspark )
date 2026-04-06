@@ -6,6 +6,10 @@
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 #include <time.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
 
 char ssid[] = "SurauAl-Irfan";
 char pass[] = "datangsurau";
@@ -90,6 +94,38 @@ BLYNK_WRITE(V3) { if (param.asInt()) openValveC_Half(); else closeValveC(); }
 BLYNK_WRITE(V4) { if (param.asInt()) openValveD(); else closeValveD(); }
 BLYNK_CONNECTED() { Blynk.syncVirtual(V12); }
 
+void logToGoogleSheets() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+
+    // Read relay state. LOW means motor is powered (or was powered). 
+    // This is an approximation as motorized valves keep state.
+    int valveC_on = !digitalRead(RELAY_C_PIN) || valveCHalfOpening;
+    int valveD_on = !digitalRead(RELAY_D_PIN);
+
+    String statusStr = "VALVE_C:" + String(valveC_on) + "_D:" + String(valveD_on);
+
+    String url = String(googleScriptUrl) + "?node=Cyberspark" +
+                 "&v1=" + String(valveC_on) +
+                 "&v2=" + String(valveD_on) +
+                 "&status=" + statusStr;
+
+    Serial.print("Logging to Google Sheets: ");
+    http.begin(client, url);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+    
+    if (httpCode > 0) {
+      Serial.println("OK (" + String(httpCode) + ")");
+    } else {
+      Serial.println("FAILED (" + http.errorToString(httpCode).c_str() + ")");
+    }
+    http.end();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(RELAY_C_PIN, OUTPUT);
@@ -104,6 +140,7 @@ void setup() {
   
   timer.setInterval(100L, processMotorTiming);
   timer.setInterval(15000L, checkSchedule);
+  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {

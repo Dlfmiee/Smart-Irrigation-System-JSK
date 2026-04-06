@@ -4,6 +4,10 @@
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
 
 char ssid[] = "SurauAl-Irfan";
 char pass[] = "datangsurau";
@@ -36,6 +40,29 @@ void sendFlowRate() {
   Blynk.virtualWrite(V0, flowRate);
 }
 
+void logToGoogleSheets() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+
+    String url = String(googleScriptUrl) + "?node=Flexxy" +
+                 "&v1=" + String(flowRate, 3);
+
+    Serial.print("Logging to Google Sheets: ");
+    http.begin(client, url);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+    
+    if (httpCode > 0) {
+      Serial.println("OK (" + String(httpCode) + ")");
+    } else {
+      Serial.println("FAILED (" + http.errorToString(httpCode).c_str() + ")");
+    }
+    http.end();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -49,6 +76,7 @@ void setup() {
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
   timer.setInterval(1000L, sendFlowRate);
+  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {

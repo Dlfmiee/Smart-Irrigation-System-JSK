@@ -4,6 +4,10 @@
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
 
 /* --- Blynk Credentials --- */
 char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; 
@@ -102,6 +106,35 @@ void syncCloudData() {
   Blynk.syncVirtual(V0); 
 }
 
+void logToGoogleSheets() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+
+    String statusStr = pumpState ? "PUMP_ON" : "PUMP_OFF";
+    if (pumpError) statusStr = "PUMP_ERROR_DRY_RUN";
+
+    String url = String(googleScriptUrl) + "?node=DTBuddy" +
+                 "&v1=" + String(pumpState) +
+                 "&v2=" + String(pumpError) +
+                 "&v3=" + String(flowE) +
+                 "&status=" + statusStr;
+
+    Serial.print("Logging to Google Sheets: ");
+    http.begin(client, url);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+    
+    if (httpCode > 0) {
+      Serial.println("OK (" + String(httpCode) + ")");
+    } else {
+      Serial.println("FAILED (" + http.errorToString(httpCode).c_str() + ")");
+    }
+    http.end();
+  }
+}
+
 BLYNK_WRITE(V3) { v3_open = param.asInt() == 1; }
 BLYNK_WRITE(V4) { v4_open = param.asInt() == 1; }
 BLYNK_WRITE(V5) { v5_open = param.asInt() == 1; }
@@ -121,6 +154,7 @@ void setup() {
 
   timer.setInterval(2000L, evaluatePumpState);
   timer.setInterval(10000L, syncCloudData); 
+  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 
 void loop() {

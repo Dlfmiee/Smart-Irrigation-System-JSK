@@ -18,6 +18,10 @@ char pass[] = "datangsurau";
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <BlynkSimpleEsp32.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+
+const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
 
 /************ VARIABLE ************/
 int analogValue = 0;
@@ -57,6 +61,36 @@ void sendToBlynk() {
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 }
 
+void logToGoogleSheets() {
+  int floatState = digitalRead(FLOAT_PIN);
+  int floatStatus = (floatState == LOW) ? 1 : 0;
+  String statusStr = floatStatus ? "TANK_FULL" : "TANK_LOW";
+
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+
+    String url = String(googleScriptUrl) + "?node=Eclipse" +
+                 "&v1=" + String(ecValue, 2) +
+                 "&v2=" + String(tdsValue, 0) +
+                 "&v3=" + String(floatStatus) +
+                 "&status=" + statusStr;
+
+    Serial.print("Logging to Google Sheets: ");
+    http.begin(client, url);
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+    int httpCode = http.GET();
+    
+    if (httpCode > 0) {
+      Serial.println("OK (" + String(httpCode) + ")");
+    } else {
+      Serial.println("FAILED (" + http.errorToString(httpCode).c_str() + ")");
+    }
+    http.end();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -69,6 +103,7 @@ void setup() {
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
   timer.setInterval(5000L, sendToBlynk);
+  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 
   Serial.println("SYSTEM START - ESP32 + BLYNK");
 }
