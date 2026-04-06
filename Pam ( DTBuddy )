@@ -115,11 +115,7 @@ void logToGoogleSheets() {
     String statusStr = pumpState ? "PUMP_ON" : "PUMP_OFF";
     if (pumpError) statusStr = "PUMP_ERROR_DRY_RUN";
 
-    String url = String(googleScriptUrl) + "?node=DTBuddy" +
-                 "&v1=" + String(pumpState) +
-                 "&v2=" + String(pumpError) +
-                 "&v3=" + String(flowE) +
-                 "&status=" + statusStr;
+    String url = String(googleScriptUrl) + "?pump=" + String(pumpState);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);

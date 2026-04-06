@@ -80,9 +80,8 @@ void logToGoogleSheets() {
     client.setInsecure();
     HTTPClient http;
 
-    String url = String(googleScriptUrl) + "?node=Aieman" +
-                 "&v1=" + String(rainValue) +
-                 "&status=" + status;
+    int rainFlag = rainLockout ? 1 : 0;
+    String url = String(googleScriptUrl) + "?rain=" + String(rainFlag);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);

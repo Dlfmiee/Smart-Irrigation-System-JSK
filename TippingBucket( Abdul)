@@ -48,9 +48,7 @@ void logToGoogleSheets() {
     client.setInsecure();
     HTTPClient http;
 
-    String url = String(googleScriptUrl) + "?node=Abdul" +
-                 "&v1=" + String(rainfall, 2) +
-                 "&v2=" + String(tipCount);
+    String url = String(googleScriptUrl) + "?rainfall=" + String(rainfall, 2);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);

@@ -107,10 +107,7 @@ void logToGoogleSheets() {
 
     String statusStr = "VALVE_C:" + String(valveC_on) + "_D:" + String(valveD_on);
 
-    String url = String(googleScriptUrl) + "?node=Cyberspark" +
-                 "&v1=" + String(valveC_on) +
-                 "&v2=" + String(valveD_on) +
-                 "&status=" + statusStr;
+    String url = String(googleScriptUrl) + "?valveC=" + String(valveC_on) + "&valveD=" + String(valveD_on);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);

@@ -71,11 +71,7 @@ void logToGoogleSheets() {
     client.setInsecure();
     HTTPClient http;
 
-    String url = String(googleScriptUrl) + "?node=Eclipse" +
-                 "&v1=" + String(ecValue, 2) +
-                 "&v2=" + String(tdsValue, 0) +
-                 "&v3=" + String(floatStatus) +
-                 "&status=" + statusStr;
+    String url = String(googleScriptUrl) + "?ec=" + String(ecValue, 2) + "&tank=" + String(floatStatus);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);

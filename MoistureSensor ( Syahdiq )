@@ -71,11 +71,7 @@ void logToGoogleSheets() {
     client.setInsecure(); // Google certificates rotate often; skip validation for simplicity
     HTTPClient http;
 
-    String url = String(googleScriptUrl) + "?node=Syahdiq" +
-                 "&v1=" + String(avg) +
-                 "&v2=" + String(v1) +
-                 "&v3=" + String(v2) +
-                 "&status=" + String(v3);
+    String url = String(googleScriptUrl) + "?moisture=" + String(avg);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);
