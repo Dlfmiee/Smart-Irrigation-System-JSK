@@ -1,11 +1,11 @@
 #define BLYNK_PRINT Serial
-
 #define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
+#include <time.h>
 
 char ssid[] = "SurauAl-Irfan";
 char pass[] = "datangsurau";
@@ -15,41 +15,71 @@ char pass[] = "datangsurau";
 #define LED_PIN 27           // LED indicator
 
 BlynkTimer timer;
+bool rainLockout = false;
+int lastResetDay = -1;
 
 void readRainSensor()
 {
   int rainValue = analogRead(RAIN_SENSOR_PIN);
+  Blynk.virtualWrite(V14, rainValue);
 
-  Serial.print("Rain Value: ");
-  Serial.println(rainValue);
-
-  // Hantar ke Blynk (Virtual Pin V2)
-  Blynk.virtualWrite(V2, rainValue);
-
-  // Logic hujan (ubah threshold ikut test kamu)
-  if (rainValue < 2000)   // Basah
+  // Rain threshold (adjust according to calibration)
+  if (rainValue < 2000)   // Raining
   {
     digitalWrite(LED_PIN, HIGH);
-    Serial.println("Status: RAINING");
-    Blynk.virtualWrite(V1, "RAINING");
+    Blynk.virtualWrite(V13, "RAINING");
+    
+    // Activate global rain lockout if not already active
+    if (!rainLockout) {
+      rainLockout = true;
+      Blynk.virtualWrite(V17, 1);
+      Serial.println("Rain detected! Setting Global Rain Lockout (V17) to ON.");
+    }
   }
   else
   {
     digitalWrite(LED_PIN, LOW);
-    Serial.println("Status: NO RAIN");
-    Blynk.virtualWrite(V1, "NO RAIN");
+    Blynk.virtualWrite(V13, "NO RAIN");
   }
+}
+
+void checkMidnightReset() {
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    // Reset rain lockout exactly at midnight (00:00) so irrigation can resume next day
+    if (timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
+      if (lastResetDay != timeinfo.tm_mday) {
+        rainLockout = false;
+        Blynk.virtualWrite(V17, 0); // Clear lockout in the cloud
+        lastResetDay = timeinfo.tm_mday;
+        Serial.println("Midnight Reached! Rain Lockout (V17) has been RESET.");
+      }
+    }
+  }
+}
+
+// Read lockout from cloud just in case of ESP restart
+BLYNK_WRITE(V17) {
+  rainLockout = param.asInt() == 1;
+}
+
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(V17); // Sync Rain Lockout state
 }
 
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  
+  // Set Timezone Malaysia (GMT+8)
+  configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
 
-  // Baca setiap 2 saat
   timer.setInterval(2000L, readRainSensor);
+  timer.setInterval(30000L, checkMidnightReset); // Check schedule safely
 }
 
 void loop()

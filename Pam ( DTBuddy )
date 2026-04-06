@@ -1,4 +1,4 @@
- #define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_PRINT Serial
 
@@ -12,88 +12,124 @@ char pass[] = "datangsurau";
 
 /* --- Pins --- */
 const int relayPin = 26;   // ACTIVE-LOW
-const int ledPin   = 27;   // Power LED
+const int ledPin   = 27;   
 
-/* --- Soil thresholds --- */
-#define DRY_ON   2600
-#define WET_OFF  2300
+/* --- State Variables --- */
+bool pumpState = false;
+bool manualOverride = false;
+bool pumpError = false;      
+unsigned long pumpStartTime = 0;
 
-/* --- Relay timing --- */
-const unsigned long relayDuration = 150000UL; // 2 mins 30 sec in milliseconds
-unsigned long relayStartTime = 0;             // When relay was turned ON
+// Valve States
+bool v3_open = false, v4_open = false; // Valve C & D
+bool v7_open = false, v8_open = false; // Valve A & B
+bool rainLockout = false;              // Global Rain (V17)
 
-/* --- Variables --- */
-int soilAverage = 0;
-bool soilDry = false;
-bool relayState = false;        // Current relay state
-bool manualOverride = false;    // Manual override active
-bool soilReceived = false;      // First soil reading received
+// Flow Rates 
+float flowC = 0, flowD = 0;
+float flowA = 0, flowB = 0;
+float flowE = 0;
 
-/* --- Setup --- */
-void setup() {
-  Serial.begin(9600);
+BlynkTimer timer;
 
-  pinMode(relayPin, OUTPUT);
-  pinMode(ledPin, OUTPUT);
-
-  digitalWrite(ledPin, HIGH);   // Power LED ON
-  digitalWrite(relayPin, LOW);  // Relay ON at startup
-  relayState = true;
-  relayStartTime = millis();    // Start the timer
-
-  Serial.println("Connecting to Blynk...");
-  Blynk.begin(auth, ssid, pass);
-  Serial.println("Blynk connected!");
+void turnPumpON() {
+  if (pumpState) return;
+  digitalWrite(relayPin, LOW); 
+  pumpState = true;
+  pumpStartTime = millis();
+  Blynk.virtualWrite(V15, 1);
+  Serial.println("PUMP ON: Starting Master Cycle Phase.");
 }
 
-/* --- Receive soil average from Soil ESP32 --- */
-BLYNK_WRITE(V1) {
-  soilAverage = param.asInt();
-  soilReceived = true;
-
-  Serial.print("Received soil average: ");
-  Serial.println(soilAverage);
-
-  // Hysteresis logic
-  if (!soilDry && soilAverage > DRY_ON) soilDry = true;
-  else if (soilDry && soilAverage < WET_OFF) soilDry = false;
+void turnPumpOFF() {
+  if (!pumpState) return;
+  digitalWrite(relayPin, HIGH); 
+  pumpState = false;
+  Blynk.virtualWrite(V15, 0);
+  Serial.println("PUMP OFF");
 }
 
-/* --- Manual override button on Blynk --- */
-BLYNK_WRITE(V0) { // Manual button
-  int buttonState = param.asInt(); // 1 = ON, 0 = OFF
-  manualOverride = true;           // Enable manual override
-  relayState = (buttonState == 1);
-  digitalWrite(relayPin, relayState ? LOW : HIGH); // ACTIVE-LOW
-  relayStartTime = millis();       // Reset timer
-
-  Serial.print("Manual override: Relay ");
-  Serial.println(relayState ? "ON" : "OFF");
+void masterResetAll() {
+  // Master Controller enforces Default Mode (All Closed)
+  turnPumpOFF();
+  Blynk.virtualWrite(V3, 0); v3_open = false;
+  Blynk.virtualWrite(V4, 0); v4_open = false;
+  Blynk.virtualWrite(V7, 0); v7_open = false;
+  Blynk.virtualWrite(V8, 0); v8_open = false;
+  Serial.println("MASTER: 120s Cycle Finished. System returned to Default State.");
 }
 
-/* --- Main Loop --- */
-void loop() {
-  Blynk.run();
+/* --- Core Smart Pump Logic --- */
+void evaluatePumpState() {
 
-  unsigned long currentMillis = millis();
+  // We only care if an OUTLET valve is open (B or D) to run the pump 
+  // (Inlet valves A and C don't strictly require the pump to open)
+  bool anyOutletOpen = (v4_open || v8_open);
+  
+  // 1. Turn ON condition
+  if (anyOutletOpen && !rainLockout && !pumpError) {
+    turnPumpON();
+  }
+  
+  // 2. Turn OFF conditions
+  if (!anyOutletOpen || rainLockout || pumpError) {
+    turnPumpOFF();
+  }
 
-  // Automatic control only if no manual override
-  if (!manualOverride && soilReceived) {
-    if (soilDry && !relayState) {
-      relayState = true;
-      digitalWrite(relayPin, LOW);      // Relay ON
-      relayStartTime = currentMillis;   // Start timer
-      Serial.println("AUTO: Soil dry → Relay ON");
+  if (pumpState && !pumpError) {
+    unsigned long runTime = millis() - pumpStartTime;
+
+    // 3. Dry-Run Protection (Flow Verification - 15 Seconds)
+    if (runTime > 15000 && runTime < 20000) { // Only check once strictly in this window
+      float totalFlow = flowA + flowB + flowC + flowD + flowE;
+      if (totalFlow < 0.1) {
+        Serial.println("DRY RUN DETECTED! No flow after 15s.");
+        pumpError = true;
+        masterResetAll(); // Shut down entire system to protect hardware
+        Blynk.logEvent("pump_error", "Dry Run Detected! Pump and Valves shut down.");
+        return; 
+      }
+    }
+
+    // 4. The 2-Minute Unified Cycle Cap (120,000ms)
+    if (runTime >= 120000) {
+      masterResetAll();
     }
   }
+}
 
-  // Check if relay should turn OFF after duration
-  if (relayState && (currentMillis - relayStartTime >= relayDuration)) {
-    relayState = false;
-    digitalWrite(relayPin, HIGH);       // Relay OFF
-    Serial.println("Relay timer expired → Relay OFF");
+/* --- Fetch Cloud Data --- */
+void syncCloudData() {
+  Blynk.syncVirtual(V3, V4, V7, V8, V17); 
+  Blynk.syncVirtual(V0, V5, V6, V9, V10); 
+}
 
-    // Reset manual override if it was active
-    if (manualOverride) manualOverride = false;
-  }
+BLYNK_WRITE(V3) { v3_open = param.asInt() == 1; }
+BLYNK_WRITE(V4) { v4_open = param.asInt() == 1; }
+BLYNK_WRITE(V7) { v7_open = param.asInt() == 1; }
+BLYNK_WRITE(V8) { v8_open = param.asInt() == 1; }
+BLYNK_WRITE(V17){ rainLockout = param.asInt() == 1; }
+
+BLYNK_WRITE(V0) { flowE = param.asFloat(); }
+BLYNK_WRITE(V5) { flowC = param.asFloat(); }
+BLYNK_WRITE(V6) { flowD = param.asFloat(); }
+BLYNK_WRITE(V9) { flowA = param.asFloat(); }
+BLYNK_WRITE(V10){ flowB = param.asFloat(); }
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(relayPin, OUTPUT);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, HIGH);   
+  digitalWrite(relayPin, HIGH); 
+  
+  Blynk.begin(auth, ssid, pass);
+
+  timer.setInterval(2000L, evaluatePumpState);
+  timer.setInterval(10000L, syncCloudData); 
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
 }

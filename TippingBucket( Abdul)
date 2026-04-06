@@ -10,6 +10,7 @@ char pass[] = "datangsurau";
 
 const int REED_PIN = 27;
 const float RAIN_PER_TIP = 0.2;
+const float LOCKOUT_THRESHOLD = 5.0; // Trigger lockout at 5mm
 
 unsigned long tipCount = 0;
 bool lastState = HIGH;
@@ -22,11 +23,17 @@ BlynkTimer timer;
 void sendData() {
   float rainfall = tipCount * RAIN_PER_TIP;
 
-  Blynk.virtualWrite(V0, rainfall);
+  Blynk.virtualWrite(V12, rainfall);
 
   Serial.print("Rainfall: ");
   Serial.print(rainfall);
   Serial.println(" mm");
+  
+  // Composite Rain Lockout
+  if (rainfall >= LOCKOUT_THRESHOLD) {
+    Blynk.virtualWrite(V17, 1);
+    Serial.println("High Rainfall! Triggering Rain Lockout (V17).");
+  }
 }
 
 void setup() {

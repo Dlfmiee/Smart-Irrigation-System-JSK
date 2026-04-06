@@ -17,6 +17,7 @@ char pass[] = "datangsurau";
 // Adjust this value after calibration
 // Higher value = drier soil
 int dryThreshold = 2500;
+int wetThreshold = 1800; // Too wet, prevent watering
 
 bool soil1Dry;
 bool soil2Dry;
@@ -47,6 +48,12 @@ void sendMoistureToBlynk() {
 
   // Send to Blynk
   Blynk.virtualWrite(V11, soilAverage);
+
+  // Composite Rain Lockout: If soil is extremely wet, lock out system
+  if (soilAverage < wetThreshold) {
+      Blynk.virtualWrite(V17, 1);
+      Serial.println("Soil extremely wet! Triggering Rain Lockout (V17).");
+  }
 }
 
 void setup() {
