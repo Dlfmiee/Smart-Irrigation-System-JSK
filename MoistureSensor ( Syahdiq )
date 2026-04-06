@@ -81,7 +81,7 @@ void logToGoogleSheets() {
     if (httpCode > 0) {
       Serial.println("OK (" + String(httpCode) + ")");
     } else {
-      Serial.println("FAILED (" + http.errorToString(httpCode).c_str() + ")");
+      Serial.println("FAILED (" + http.errorToString(httpCode) + ")");
     }
     http.end();
   }
