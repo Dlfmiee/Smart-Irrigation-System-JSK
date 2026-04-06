@@ -1,12 +1,12 @@
-#define BLYNK_TEMPLATE_ID "YourTemplateID"
-#define BLYNK_TEMPLATE_NAME "RainGauge"
-#define BLYNK_AUTH_TOKEN "YourAuthToken"
+#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
+#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 
-char ssid[] = "YourWiFi";
-char pass[] = "YourPassword";
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
 
 const int REED_PIN = 27;
 const float RAIN_PER_TIP = 0.2;

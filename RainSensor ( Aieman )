@@ -1,14 +1,14 @@
 #define BLYNK_PRINT Serial
 
-#define BLYNK_TEMPLATE_ID "TMPL60F-6p8Cm"
-#define BLYNK_TEMPLATE_NAME "ESP32"
-#define BLYNK_AUTH_TOKEN "hZGYLiw8BaQ1iOH3L6JoOz_L3lMJ1a9b"
+#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
+#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 
-char ssid[] = "C02 LAB 2";
-char pass[] = "1234abcd5";
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
 
 // Pin setup
 #define RAIN_SENSOR_PIN 34   // Analog pin

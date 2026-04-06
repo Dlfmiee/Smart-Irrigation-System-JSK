@@ -1,12 +1,12 @@
-#define BLYNK_TEMPLATE_ID "TMPL67L5v5I01"
-#define BLYNK_TEMPLATE_NAME "Water Flow Monitor"
-#define BLYNK_AUTH_TOKEN "zh3jWhm0FaK45niHGNj-35-pLyfbuaWs"
+#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
+#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 
-char ssid[] = "Fmz";
-char pass[] = "iiiiiiii";
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
 
 #define FLOW_SENSOR_PIN 27
 #define LED_PIN 26

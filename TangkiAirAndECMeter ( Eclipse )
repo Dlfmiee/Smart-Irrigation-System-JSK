@@ -1,0 +1,79 @@
+/************ BLYNK SETUP ************/
+#define BLYNK_PRINT Serial
+
+#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
+#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+
+/************ WIFI ************/
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
+
+/************ PIN ************/
+#define FLOAT_PIN 13
+#define TDS_PIN   34
+#define LED_PIN   27
+#define VREF      3.3
+
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+/************ VARIABLE ************/
+int analogValue = 0;
+float voltage = 0;
+float tdsValue = 0;
+float ecValue = 0;
+
+BlynkTimer timer;
+
+/************ FUNCTION ************/
+void sendToBlynk() {
+
+  // ===== FLOAT SWITCH =====
+  int floatState = digitalRead(FLOAT_PIN);
+  int floatStatus = (floatState == LOW) ? 1 : 0;
+
+  // ===== TDS SENSOR =====
+  analogValue = analogRead(TDS_PIN);
+  voltage = analogValue * VREF / 4095.0;
+  tdsValue = (voltage / VREF) * 1000.0;
+  ecValue = tdsValue / 500.0;
+
+  // ===== SERIAL =====
+  Serial.print("FLOAT: ");
+  Serial.print(floatStatus ? "ON" : "OFF");
+  Serial.print(" | TDS: ");
+  Serial.print(tdsValue, 0);
+  Serial.print(" ppm | EC: ");
+  Serial.print(ecValue, 2);
+  Serial.println(" ms/cm");
+
+  // ===== SEND TO BLYNK =====
+  Blynk.virtualWrite(V1, floatStatus); // Float switch
+  Blynk.virtualWrite(V2, ecValue);     // EC
+
+  // ===== HEARTBEAT LED =====
+  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(FLOAT_PIN, INPUT_PULLUP);
+  pinMode(TDS_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  digitalWrite(LED_PIN, HIGH);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  timer.setInterval(5000L, sendToBlynk);
+
+  Serial.println("SYSTEM START - ESP32 + BLYNK");
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}

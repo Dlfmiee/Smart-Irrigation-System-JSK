@@ -1,3 +1,14 @@
+#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
+#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+/************ WIFI ************/
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
+
 // Soil sensor pins (ADC pins on ESP32)
 #define SOIL1 34
 #define SOIL2 35
@@ -11,19 +22,15 @@ bool soil1Dry;
 bool soil2Dry;
 bool soil3Dry;
 
-void setup() {
-  Serial.begin(115200);
+BlynkTimer timer;
 
-  pinMode(SOIL1, INPUT);
-  pinMode(SOIL2, INPUT);
-  pinMode(SOIL3, INPUT);
-}
-
-void loop() {
-
+void sendMoistureToBlynk() {
   int soilValue1 = analogRead(SOIL1);
   int soilValue2 = analogRead(SOIL2);
   int soilValue3 = analogRead(SOIL3);
+
+  // Calculate average
+  int soilAverage = (soilValue1 + soilValue2 + soilValue3) / 3;
 
   // Condition: TRUE if DRY, FALSE if WET
   soil1Dry = (soilValue1 > dryThreshold);
@@ -31,20 +38,29 @@ void loop() {
   soil3Dry = (soilValue3 > dryThreshold);
 
   // Print results
-  Serial.print("Soil 1: ");
-  Serial.print(soilValue1);
-  Serial.print(" -> ");
-  Serial.println(soil1Dry);
+  Serial.print("Soil Avg: ");
+  Serial.print(soilAverage);
+  Serial.print(" | S1: "); Serial.print(soilValue1);
+  Serial.print(" | S2: "); Serial.print(soilValue2);
+  Serial.print(" | S3: "); Serial.print(soilValue3);
+  Serial.println();
 
-  Serial.print("Soil 2: ");
-  Serial.print(soilValue2);
-  Serial.print(" -> ");
-  Serial.println(soil2Dry);
+  // Send to Blynk
+  Blynk.virtualWrite(V11, soilAverage);
+}
 
-  Serial.print("Soil 3: ");
-  Serial.print(soilValue3);
-  Serial.print(" -> ");
-  Serial.println(soil3Dry);
+void setup() {
+  Serial.begin(115200);
 
-  delay(2000); // read every 2 seconds
+  pinMode(SOIL1, INPUT);
+  pinMode(SOIL2, INPUT);
+  pinMode(SOIL3, INPUT);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  timer.setInterval(2000L, sendMoistureToBlynk);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
 }

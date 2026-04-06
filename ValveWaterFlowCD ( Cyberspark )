@@ -1,14 +1,15 @@
-#define BLYNK_TEMPLATE_ID "TMPL6p1GHBzLY"
-#define BLYNK_TEMPLATE_NAME "VALVE"
+#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
+#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 #include <time.h>
 
 // Kredensial
-char ssid[] = "keren";
-char pass[] = "oooooooo";
-char auth[] = "wK_Tfj4E8Uxip0VZZOBSzL5RBBFmBxA3";
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
+char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
 
 // Definisi Pin - 2 Relay untuk 2 Valve
 #define RELAY_C_PIN 26    // Valve C (Motorized Ball Valve C)

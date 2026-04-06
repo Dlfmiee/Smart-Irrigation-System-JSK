@@ -1,12 +1,12 @@
- #define BLYNK_TEMPLATE_ID "TMPL60F-6p8Cm"
-#define BLYNK_TEMPLATE_NAME "ESP32"
+ #define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 
 /* --- Blynk Credentials --- */
-char auth[] = "VQ3Vdt1Agq7VuZDADp2X1ntE35PnOLCB"; // Replace with your relay ESP32 token
+char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; 
 char ssid[] = "SurauAl-Irfan";
 char pass[] = "datangsurau";
 
