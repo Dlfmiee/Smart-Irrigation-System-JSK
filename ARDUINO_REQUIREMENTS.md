@@ -19,6 +19,8 @@ Install these libraries via the **Library Manager** (Tools > Manage Libraries):
 | **Blynk** | Volodymyr Shymanskyy| Cloud connectivity & Mobile App |
 | **WiFi** | (Built-in) | ESP32 Network connectivity |
 | **Time** | (Built-in) | Real-time scheduling via NTP |
+| **HTTPClient** | (Built-in) | Sending data to Google Sheets |
+| **WiFiClientSecure** | (Built-in) | Secure HTTPS/SSL for Google |
 
 ## 3. Deployment Checklist (Which Code Goes Where?)
 

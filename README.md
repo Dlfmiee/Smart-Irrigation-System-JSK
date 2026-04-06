@@ -8,6 +8,7 @@ A high-performance, distributed IoT irrigation solution powered by **8 ESP32 mic
 - **Dry-Run Protection**: The pump automatically cuts power if no water flow is detected within 15 seconds.
 - **Optimized Vpin Mapping**: Uses a clean sequence of **13 Virtual Pins (V0-V12)** for real-time monitoring and control.
 - **Automated Scheduling**: Independent timers for Water (4x daily) and Fertilizer (1x daily).
+- **Consolidated IoT Logging**: Automatically groups data from all 8 nodes into a single **Google Sheet** row every 5 minutes for long-term observation and 7-day testing.
 
 ## 📂 Project Structure
 The repository contains 8 separate Arduino codebases, each intended for a specific ESP32 node:
@@ -22,6 +23,12 @@ The repository contains 8 separate Arduino codebases, each intended for a specif
 | **Abdul** | Rain Gauge | Physical tipping bucket gauge for mm measurement. |
 | **Aieman** | Rain Sensor | Instant rain detection and cloud-lockout trigger. |
 | **DT Buddy** | **Master Pump**| Central pump controller with safety logic. |
+
+## 📊 Data Observation (Google Sheets)
+The system is equipped with a high-efficiency logging bridge using **Google Apps Script**. 
+- **Interval**: 5 Minutes (300,000ms)
+- **Format**: Consolidated Row (All 8 nodes merged into one entry)
+- **Storage**: Provides unlimited historical data retention, bypassing Blynk's free-tier message limits.
 
 ## 🛠️ Getting Started
 1. **[Arduino Requirements](file:///c:/Users/Fahmi/Desktop/Smart-Irrigation-System-JSK/ARDUINO_REQUIREMENTS.md)**: How to set up your IDE and libraries.

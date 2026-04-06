@@ -7,7 +7,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 
-const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
+const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbzp3ugFaaSGtBrX-RHZeHQjGB6KnfrzTSdFGqJvEvvV28-6j_nPyu6VP0Jhb2eOVl6B/exec";
 
 char ssid[] = "SurauAl-Irfan";
 char pass[] = "datangsurau";
