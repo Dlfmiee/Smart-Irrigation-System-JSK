@@ -1,0 +1,256 @@
+#define BLYNK_TEMPLATE_ID "TMPL6p1GHBzLY"
+#define BLYNK_TEMPLATE_NAME "VALVE"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <time.h>
+
+// Kredensial
+char ssid[] = "keren";
+char pass[] = "oooooooo";
+char auth[] = "wK_Tfj4E8Uxip0VZZOBSzL5RBBFmBxA3";
+
+// Definisi Pin - 2 Relay untuk 2 Valve
+#define RELAY_C_PIN 26    // Valve C (Motorized Ball Valve C)
+#define RELAY_D_PIN 27    // Valve D (Motorized Ball Valve D)
+
+// Definisi Pin - 2 Flow Sensor
+#define FLOW_SENSOR_C_PIN 13  // Water Flow Sensor C
+#define FLOW_SENSOR_D_PIN 14  // Water Flow Sensor D
+
+// Variabel Flow Sensor C
+volatile int pulseCountC = 0;
+float flowRateC = 0.0;
+unsigned long oldTimeC = 0;
+
+// Variabel Flow Sensor D
+volatile int pulseCountD = 0;
+float flowRateD = 0.0;
+unsigned long oldTimeD = 0;
+
+const float calibrationFactor = 450.0; 
+
+// Timer & State
+BlynkTimer timer;
+bool valveCOpen = false;
+bool valveDOpen = false;
+unsigned long valveSequenceStartTime = 0;
+bool sequenceActive = false;
+
+const unsigned long valveCOpenDelay = 10000;  // 10 saat untuk buka Valve C
+const unsigned long valveDuration = 60000;     // 1 minit (60 saat)
+int lastTriggerHour = -1;
+
+// Interrupt Handler untuk Sensor C
+void IRAM_ATTR pulseCounterC() {
+  pulseCountC++;
+}
+
+// Interrupt Handler untuk Sensor D
+void IRAM_ATTR pulseCounterD() {
+  pulseCountD++;
+}
+
+// Hitung Flow Rate untuk Sensor C
+void calculateFlowRateC() {
+  unsigned long currentTime = millis();
+  if ((currentTime - oldTimeC) >= 1000) {
+    detachInterrupt(FLOW_SENSOR_C_PIN);
+    
+    flowRateC = ((1000.0 / (millis() - oldTimeC)) * pulseCountC) / (calibrationFactor / 60.0);
+    
+    oldTimeC = millis();
+    pulseCountC = 0;
+    attachInterrupt(FLOW_SENSOR_C_PIN, pulseCounterC, FALLING);
+    
+    Blynk.virtualWrite(V1, flowRateC);  // Flow Rate Sensor C ke V1
+    Serial.print("Flow rate C: ");
+    Serial.print(flowRateC);
+    Serial.println(" L/min");
+
+    // Alert Logic untuk Valve C
+    if (valveCOpen && flowRateC < 0.1) {
+      Blynk.logEvent("valve_alert", "Warning: Valve C OPEN but NO flow!");
+    } else if (!valveCOpen && flowRateC > 0.1) {
+      Blynk.logEvent("valve_alert", "Warning: Valve C CLOSED but flow detected!");
+    }
+  }
+}
+
+// Hitung Flow Rate untuk Sensor D
+void calculateFlowRateD() {
+  unsigned long currentTime = millis();
+  if ((currentTime - oldTimeD) >= 1000) {
+    detachInterrupt(FLOW_SENSOR_D_PIN);
+    
+    flowRateD = ((1000.0 / (millis() - oldTimeD)) * pulseCountD) / (calibrationFactor / 60.0);
+    
+    oldTimeD = millis();
+    pulseCountD = 0;
+    attachInterrupt(FLOW_SENSOR_D_PIN, pulseCounterD, FALLING);
+    
+    Blynk.virtualWrite(V2, flowRateD);  // Flow Rate Sensor D ke V2
+    Serial.print("Flow rate D: ");
+    Serial.print(flowRateD);
+    Serial.println(" L/min");
+
+    // Alert Logic untuk Valve D
+    if (valveDOpen && flowRateD < 0.1) {
+      Blynk.logEvent("valve_alert", "Warning: Valve D OPEN but NO flow!");
+    } else if (!valveDOpen && flowRateD > 0.1) {
+      Blynk.logEvent("valve_alert", "Warning: Valve D CLOSED but flow detected!");
+    }
+  }
+}
+
+// Fungsi untuk Valve C
+void openValveC() {
+  digitalWrite(RELAY_C_PIN, LOW); // Active Low
+  valveCOpen = true;
+  Blynk.virtualWrite(V0, 1); 
+  Serial.println("Action: Valve C Opening (slowly - 10 seconds)");
+}
+
+void closeValveC() {
+  digitalWrite(RELAY_C_PIN, HIGH); 
+  valveCOpen = false;
+  Blynk.virtualWrite(V0, 0); 
+  Serial.println("Action: Valve C Closed");
+}
+
+// Fungsi untuk Valve D
+void openValveD() {
+  digitalWrite(RELAY_D_PIN, LOW); // Active Low
+  valveDOpen = true;
+  Blynk.virtualWrite(V3, 1); 
+  Serial.println("Action: Valve D Opened");
+}
+
+void closeValveD() {
+  digitalWrite(RELAY_D_PIN, HIGH); 
+  valveDOpen = false;
+  Blynk.virtualWrite(V3, 0); 
+  Serial.println("Action: Valve D Closed");
+}
+
+// Fungsi untuk mulakan sequence penyiraman
+void startWateringSequence() {
+  sequenceActive = true;
+  valveSequenceStartTime = millis();
+  
+  // Mula buka Valve C (buka perlahan 10 saat)
+  openValveC();
+  
+  Blynk.logEvent("valve_opened", "Watering sequence started - Valve C opening slowly");
+}
+
+// Fungsi untuk stop sequence
+void stopWateringSequence() {
+  sequenceActive = false;
+  closeValveC();
+  closeValveD();
+  
+  Blynk.logEvent("valve_closed", "Watering sequence completed - All valves closed");
+}
+
+// Fungsi untuk manage sequence penyiraman
+void manageWateringSequence() {
+  if (!sequenceActive) return;
+  
+  unsigned long elapsed = millis() - valveSequenceStartTime;
+  
+  // Selepas 10 saat, buka Valve D
+  if (elapsed >= valveCOpenDelay && !valveDOpen) {
+    openValveD();
+    Serial.println("10 seconds passed - Valve D now opened");
+  }
+  
+  // Selepas 1 minit (60 saat), tutup semua valve
+  if (elapsed >= valveDuration) {
+    stopWateringSequence();
+    Serial.println("1 minute completed - Closing all valves");
+  }
+}
+
+void checkSchedule() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return;
+  }
+
+  int hour = timeinfo.tm_hour;
+  int min = timeinfo.tm_min;
+
+  // Cek Jadwal: 10, 12, 14, 16 tepat pada menit 0
+  if ((hour == 10 || hour == 12 || hour == 14 || hour == 16) && min == 0) {
+    if (lastTriggerHour != hour && !sequenceActive) {
+      startWateringSequence();
+      lastTriggerHour = hour;
+    }
+  }
+}
+
+// Kontrol Manual Valve C dari App (V0)
+BLYNK_WRITE(V0) {
+  int pinValue = param.asInt();
+  if (pinValue == 1) {
+    if (!sequenceActive) {
+      openValveC();
+    }
+  } else {
+    closeValveC();
+  }
+}
+
+// Kontrol Manual Valve D dari App (V3)
+BLYNK_WRITE(V3) {
+  int pinValue = param.asInt();
+  if (pinValue == 1) {
+    if (!sequenceActive) {
+      openValveD();
+    }
+  } else {
+    closeValveD();
+  }
+}
+
+// Kontrol untuk Start Watering Sequence (V4 - Button baru)
+BLYNK_WRITE(V4) {
+  int pinValue = param.asInt();
+  if (pinValue == 1 && !sequenceActive) {
+    startWateringSequence();
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Setup Relay Pins
+  pinMode(RELAY_C_PIN, OUTPUT);
+  pinMode(RELAY_D_PIN, OUTPUT);
+  digitalWrite(RELAY_C_PIN, HIGH); // Default OFF
+  digitalWrite(RELAY_D_PIN, HIGH); // Default OFF
+  
+  // Setup Flow Sensor Pins
+  pinMode(FLOW_SENSOR_C_PIN, INPUT_PULLUP);
+  pinMode(FLOW_SENSOR_D_PIN, INPUT_PULLUP);
+  attachInterrupt(FLOW_SENSOR_C_PIN, pulseCounterC, FALLING);
+  attachInterrupt(FLOW_SENSOR_D_PIN, pulseCounterD, FALLING);
+
+  Blynk.begin(auth, ssid, pass);
+
+  // Set Timezone Malaysia (GMT+8)
+  configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
+  
+  // Setup Timers
+  timer.setInterval(1000L, calculateFlowRateC);
+  timer.setInterval(1000L, calculateFlowRateD);
+  timer.setInterval(30000L, checkSchedule);
+  timer.setInterval(500L, manageWateringSequence);  // Check sequence setiap 0.5 saat
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}

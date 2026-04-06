@@ -1,0 +1,59 @@
+#define BLYNK_PRINT Serial
+
+#define BLYNK_TEMPLATE_ID "TMPL60F-6p8Cm"
+#define BLYNK_TEMPLATE_NAME "ESP32"
+#define BLYNK_AUTH_TOKEN "hZGYLiw8BaQ1iOH3L6JoOz_L3lMJ1a9b"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char ssid[] = "C02 LAB 2";
+char pass[] = "1234abcd5";
+
+// Pin setup
+#define RAIN_SENSOR_PIN 34   // Analog pin
+#define LED_PIN 27           // LED indicator
+
+BlynkTimer timer;
+
+void readRainSensor()
+{
+  int rainValue = analogRead(RAIN_SENSOR_PIN);
+
+  Serial.print("Rain Value: ");
+  Serial.println(rainValue);
+
+  // Hantar ke Blynk (Virtual Pin V2)
+  Blynk.virtualWrite(V2, rainValue);
+
+  // Logic hujan (ubah threshold ikut test kamu)
+  if (rainValue < 2000)   // Basah
+  {
+    digitalWrite(LED_PIN, HIGH);
+    Serial.println("Status: RAINING");
+    Blynk.virtualWrite(V1, "RAINING");
+  }
+  else
+  {
+    digitalWrite(LED_PIN, LOW);
+    Serial.println("Status: NO RAIN");
+    Blynk.virtualWrite(V1, "NO RAIN");
+  }
+}
+
+void setup()
+{
+  Serial.begin(9600);
+  pinMode(LED_PIN, OUTPUT);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  // Baca setiap 2 saat
+  timer.setInterval(2000L, readRainSensor);
+}
+
+void loop()
+{
+  Blynk.run();
+  timer.run();
+}

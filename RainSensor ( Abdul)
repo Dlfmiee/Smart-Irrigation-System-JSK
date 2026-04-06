@@ -1,0 +1,60 @@
+#define BLYNK_TEMPLATE_ID "YourTemplateID"
+#define BLYNK_TEMPLATE_NAME "RainGauge"
+#define BLYNK_AUTH_TOKEN "YourAuthToken"
+
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+
+char ssid[] = "YourWiFi";
+char pass[] = "YourPassword";
+
+const int REED_PIN = 27;
+const float RAIN_PER_TIP = 0.2;
+
+unsigned long tipCount = 0;
+bool lastState = HIGH;
+unsigned long lastDebounceTime = 0;
+const unsigned long debounceDelay = 150;
+
+BlynkTimer timer;
+
+// Hantar hanya rainfall
+void sendData() {
+  float rainfall = tipCount * RAIN_PER_TIP;
+
+  Blynk.virtualWrite(V0, rainfall);
+
+  Serial.print("Rainfall: ");
+  Serial.print(rainfall);
+  Serial.println(" mm");
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(REED_PIN, INPUT_PULLUP);
+
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  timer.setInterval(2000L, sendData);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+
+  bool currentState = digitalRead(REED_PIN);
+
+  if (lastState == HIGH && currentState == LOW) {
+    unsigned long now = millis();
+
+    if (now - lastDebounceTime > debounceDelay) {
+      tipCount++;
+      lastDebounceTime = now;
+
+      Serial.print("Tip: ");
+      Serial.println(tipCount);
+    }
+  }
+
+  lastState = currentState;
+}

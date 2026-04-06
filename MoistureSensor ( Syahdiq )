@@ -1,0 +1,50 @@
+// Soil sensor pins (ADC pins on ESP32)
+#define SOIL1 34
+#define SOIL2 35
+#define SOIL3 32
+
+// Adjust this value after calibration
+// Higher value = drier soil
+int dryThreshold = 2500;
+
+bool soil1Dry;
+bool soil2Dry;
+bool soil3Dry;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(SOIL1, INPUT);
+  pinMode(SOIL2, INPUT);
+  pinMode(SOIL3, INPUT);
+}
+
+void loop() {
+
+  int soilValue1 = analogRead(SOIL1);
+  int soilValue2 = analogRead(SOIL2);
+  int soilValue3 = analogRead(SOIL3);
+
+  // Condition: TRUE if DRY, FALSE if WET
+  soil1Dry = (soilValue1 > dryThreshold);
+  soil2Dry = (soilValue2 > dryThreshold);
+  soil3Dry = (soilValue3 > dryThreshold);
+
+  // Print results
+  Serial.print("Soil 1: ");
+  Serial.print(soilValue1);
+  Serial.print(" -> ");
+  Serial.println(soil1Dry);
+
+  Serial.print("Soil 2: ");
+  Serial.print(soilValue2);
+  Serial.print(" -> ");
+  Serial.println(soil2Dry);
+
+  Serial.print("Soil 3: ");
+  Serial.print(soilValue3);
+  Serial.print(" -> ");
+  Serial.println(soil3Dry);
+
+  delay(2000); // read every 2 seconds
+}

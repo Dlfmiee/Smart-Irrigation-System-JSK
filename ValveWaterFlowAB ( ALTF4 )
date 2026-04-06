@@ -1,0 +1,377 @@
+/*
+ ValveFlowController.ino
+ ESP32 controls a relay-driven motorized valve on a schedule (08:00 open, 08:02 close)
+ and monitors a water flow sensor (pulse output) to report whether water is flowing.
+
+ - Uses <time.h> + configTime() for NTP time sync and POSIX TZ support.
+ - Blynk IoT integration for remote monitoring and control.
+ - Edit WiFi, TZ, Blynk auth and pins in the CONFIG section.
+*/
+
+// Blynk credentials (must be defined BEFORE including Blynk library)
+#define BLYNK_TEMPLATE_ID "TMPL6zPAMfBiH"
+#define BLYNK_TEMPLATE_NAME "Valve Controller"
+#define BLYNK_AUTH_TOKEN "Jv9QYNU7UUcM305dbsO14ehg33QAXXCE"
+#define BLYNK_PRINT Serial  // Comment this out to disable prints and save space
+
+#include <WiFi.h>
+#include <time.h>
+#include <BlynkSimpleEsp32.h>
+
+// ---- CONFIG ----
+// WiFi credentials
+const char* ssid = "ils";
+const char* password = "12345678";
+
+// Use a POSIX TZ string for timezone/DST; example for Eastern Time (US):
+// "EST5EDT,M3.2.0/2,M11.1.0/2"
+// For a simple offset (no DST): "UTC0" or "GMT-5" etc.
+const char* POSIX_TZ = "MYT-8"; // Malaysia Standard Time (UTC+8, no DST)
+
+const char* ntpServer = "pool.ntp.org";
+
+// Dual-relay control for 3-wire 2-way motorized valve (DC24V)
+const int RELAY_OPEN_PIN = 25;           // GPIO for relay IN1 (valve open direction)
+const int RELAY_CLOSE_PIN = 26;          // GPIO for relay IN2 (valve close direction)
+const bool RELAY_ACTIVE_HIGH = false;    // Active Low (false = relay energizes when GPIO is LOW)
+const int FLOW_SENSOR_PIN = 4;           // GPIO from flow sensor (pulse output, YF-S201)
+
+// Safety: maximum time (ms) to keep relay on in case of schedule failure
+const unsigned long RELAY_MAX_ON_MS = 10UL * 60UL * 1000UL; // 10 minutes
+
+// Flow detection sampling
+const unsigned long FLOW_CHECK_MS = 1000; // check every 1 second
+
+// Blynk Virtual Pins
+#define VPIN_VALVE_STATUS V0      // Display: "Open", "Closed", "Moving"
+#define VPIN_FLOW_RATE V1         // Display: Flow pulses/sec
+#define VPIN_FLOW_STATUS V2       // Display: "Flowing" or "No Flow"
+#define VPIN_MANUAL_OPEN V3       // Button: Manual open valve
+#define VPIN_MANUAL_CLOSE V4      // Button: Manual close valve
+#define VPIN_MANUAL_STOP V5       // Button: Stop valve
+#define VPIN_NEXT_SCHEDULE V6     // Display: Next scheduled action
+#define VPIN_SYSTEM_STATUS V7     // Display: WiFi, Time sync status
+#define VPIN_AUTO_MODE V8         // Switch: Enable/disable auto schedule
+
+// Blynk update intervals
+const unsigned long BLYNK_UPDATE_MS = 2000; // update Blynk every 2 seconds
+
+// -----------------
+// Function forward declarations
+void openValve();
+void closeValve();
+void stopValve();
+void updateBlynkStatus();
+void setRelayOpen(bool on);
+void setRelayClose(bool on);
+void scheduleActions(struct tm *timeinfo);
+
+volatile unsigned long pulseCount = 0;
+unsigned long lastPulseCount = 0;
+unsigned long lastFlowCheck = 0;
+bool flowDetected = false;
+
+// Relay state tracking
+bool relayOpenState = false;  // true = open relay energized
+bool relayCloseState = false; // true = close relay energized
+unsigned long relayOnTimestamp = 0;
+
+int lastOpenDay = -1;
+int lastCloseDay = -1;
+
+// Blynk tracking
+unsigned long lastBlynkUpdate = 0;
+bool autoModeEnabled = true;  // Auto schedule enabled by default
+
+void IRAM_ATTR pulseCounter() {
+  pulseCount++;
+}
+
+// Blynk Virtual Pin Handlers
+BLYNK_WRITE(VPIN_MANUAL_OPEN) {
+  int value = param.asInt();
+  if (value == 1) {
+    Serial.println("Blynk: Manual OPEN command");
+    openValve();
+  }
+}
+
+BLYNK_WRITE(VPIN_MANUAL_CLOSE) {
+  int value = param.asInt();
+  if (value == 1) {
+    Serial.println("Blynk: Manual CLOSE command");
+    closeValve();
+  }
+}
+
+BLYNK_WRITE(VPIN_MANUAL_STOP) {
+  int value = param.asInt();
+  if (value == 1) {
+    Serial.println("Blynk: Manual STOP command");
+    stopValve();
+  }
+}
+
+BLYNK_WRITE(VPIN_AUTO_MODE) {
+  autoModeEnabled = param.asInt();
+  Serial.print("Blynk: Auto mode ");
+  Serial.println(autoModeEnabled ? "ENABLED" : "DISABLED");
+  Blynk.virtualWrite(VPIN_SYSTEM_STATUS, autoModeEnabled ? "Auto Mode: ON" : "Auto Mode: OFF");
+}
+
+BLYNK_CONNECTED() {
+  Serial.println("Blynk connected!");
+  // Request the latest state from the server
+  Blynk.syncVirtual(VPIN_AUTO_MODE);
+  updateBlynkStatus();
+}
+
+void updateBlynkStatus() {
+  // Update valve status
+  String valveStatus = "Stopped";
+  if (relayOpenState) valveStatus = "Opening";
+  else if (relayCloseState) valveStatus = "Closing";
+  Blynk.virtualWrite(VPIN_VALVE_STATUS, valveStatus);
+  
+  // Update flow status (LED: 1 = on/flowing, 0 = off/no flow)
+  Blynk.virtualWrite(VPIN_FLOW_STATUS, flowDetected ? 1 : 0);
+  
+  // Update next schedule
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    int hour = timeinfo.tm_hour;
+    int minute = timeinfo.tm_min;
+    
+    String nextSchedule = "";
+    if (hour < 8 || (hour == 8 && minute < 2)) {
+      if (hour < 8 || (hour == 8 && minute < 0)) {
+        nextSchedule = "Next: Open at 08:00";
+      } else {
+        nextSchedule = "Next: Close at 08:02";
+      }
+    } else {
+      nextSchedule = "Next: Open tomorrow 08:00";
+    }
+    Blynk.virtualWrite(VPIN_NEXT_SCHEDULE, nextSchedule);
+  } else {
+    Blynk.virtualWrite(VPIN_NEXT_SCHEDULE, "Time not synced");
+  }
+  
+  // Update system status
+  String sysStatus = "WiFi: " + String(WiFi.status() == WL_CONNECTED ? "OK" : "FAIL");
+  sysStatus += " | Auto: " + String(autoModeEnabled ? "ON" : "OFF");
+  Blynk.virtualWrite(VPIN_SYSTEM_STATUS, sysStatus);
+}
+
+void setRelayOpen(bool on) {
+  relayOpenState = on;
+  if (RELAY_ACTIVE_HIGH) {
+    digitalWrite(RELAY_OPEN_PIN, on ? HIGH : LOW);
+  } else {
+    digitalWrite(RELAY_OPEN_PIN, on ? LOW : HIGH);
+  }
+  if (on) relayOnTimestamp = millis();
+  Serial.print("Relay OPEN -> "); Serial.println(on ? "ON" : "OFF");
+}
+
+void setRelayClose(bool on) {
+  relayCloseState = on;
+  if (RELAY_ACTIVE_HIGH) {
+    digitalWrite(RELAY_CLOSE_PIN, on ? HIGH : LOW);
+  } else {
+    digitalWrite(RELAY_CLOSE_PIN, on ? LOW : HIGH);
+  }
+  if (on) relayOnTimestamp = millis();
+  Serial.print("Relay CLOSE -> "); Serial.println(on ? "ON" : "OFF");
+}
+
+void openValve() {
+  // Energize open relay, ensure close relay is off
+  setRelayClose(false);
+  delay(50); // brief safety delay
+  setRelayOpen(true);
+  Serial.println("Action: Open valve");
+}
+
+void closeValve() {
+  // Energize close relay, ensure open relay is off
+  setRelayOpen(false);
+  delay(50); // brief safety delay
+  setRelayClose(true);
+  Serial.println("Action: Close valve");
+}
+
+void stopValve() {
+  // De-energize both relays (motor stops)
+  setRelayOpen(false);
+  setRelayClose(false);
+  Serial.println("Action: Stop valve motor");
+}
+
+void scheduleActions(struct tm *timeinfo) {
+  // Only execute if auto mode is enabled
+  if (!autoModeEnabled) {
+    return;
+  }
+  
+  int hour = timeinfo->tm_hour;
+  int minute = timeinfo->tm_min;
+  int day = timeinfo->tm_mday;
+  int second = timeinfo->tm_sec;
+
+  // Open at 08:00:00 (once per day)
+  if (hour == 8 && minute == 0 && second < 5 && lastOpenDay != day) {
+    Serial.println("Schedule: Opening valve (08:00)");
+    openValve();
+    lastOpenDay = day;
+    Blynk.logEvent("valve_opened", "Valve opened on schedule");
+  }
+  // Close at 08:02:00 (once per day)
+  if (hour == 8 && minute == 2 && second < 5 && lastCloseDay != day) {
+    Serial.println("Schedule: Closing valve (08:02)");
+    closeValve();
+    lastCloseDay = day;
+    Blynk.logEvent("valve_closed", "Valve closed on schedule");
+  }
+}
+
+void printLocalTime() {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  char buf[64];
+  strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  Serial.print("Local time: ");
+  Serial.println(buf);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(100);
+
+  Serial.println("\n\n========== ESP32 VALVE FLOW CONTROLLER ==========");
+  Serial.println("Blynk IoT Enabled - Remote monitoring & control");
+  Serial.println("Commands: SET_TIME <HH:MM:SS> to set current time");
+  Serial.println("Example: SET_TIME 14:42:30");
+  Serial.println("=============================================\n");
+
+  pinMode(RELAY_OPEN_PIN, OUTPUT);
+  pinMode(RELAY_CLOSE_PIN, OUTPUT);
+  setRelayOpen(false); // start with both relays off
+  setRelayClose(false);
+
+  pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, RISING);
+
+  // Connect WiFi and Blynk
+  Serial.print("Connecting to WiFi & Blynk...");
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, password);
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi & Blynk connected.");
+  } else {
+    Serial.println("\nWiFi failed. Please SET_TIME manually.");
+  }
+
+  // Set TZ
+  setenv("TZ", POSIX_TZ, 1);
+  tzset();
+
+  printLocalTime();
+}
+
+void loop() {
+  unsigned long now = millis();
+  
+  // Run Blynk
+  Blynk.run();
+
+  // Handle serial commands
+  if (Serial.available() > 0) {
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    
+    if (input.startsWith("SET_TIME")) {
+      // Parse "SET_TIME HH:MM:SS"
+      int space = input.indexOf(' ');
+      if (space > 0) {
+        String timeStr = input.substring(space + 1);
+        int h1 = timeStr.indexOf(':');
+        int h2 = timeStr.lastIndexOf(':');
+        
+        if (h1 > 0 && h2 > h1) {
+          int hour = timeStr.substring(0, h1).toInt();
+          int minute = timeStr.substring(h1 + 1, h2).toInt();
+          int second = timeStr.substring(h2 + 1).toInt();
+          
+          struct tm timeinfo = {0};
+          timeinfo.tm_year = 126;      // 2026
+          timeinfo.tm_mon = 0;         // January
+          timeinfo.tm_mday = 29;       // day
+          timeinfo.tm_hour = hour;
+          timeinfo.tm_min = minute;
+          timeinfo.tm_sec = second;
+          timeinfo.tm_isdst = -1;
+          
+          time_t unixTime = mktime(&timeinfo);
+          timeval tv;
+          tv.tv_sec = unixTime;
+          tv.tv_usec = 0;
+          settimeofday(&tv, NULL);
+          
+          Serial.print("✓ Time set to: ");
+          Serial.print(hour); Serial.print(":");
+          Serial.print(minute); Serial.print(":");
+          Serial.println(second);
+        }
+      }
+    }
+  }
+
+  // Periodic flow detection check
+  if (now - lastFlowCheck >= FLOW_CHECK_MS) {
+    noInterrupts();
+    unsigned long pulses = pulseCount;
+    interrupts();
+
+    unsigned long pulsesInWindow = pulses - lastPulseCount;
+    lastPulseCount = pulses;
+
+    flowDetected = (pulsesInWindow > 0);
+
+    Serial.print("Flow: ");
+    Serial.print(flowDetected ? "FLOWING" : "NO FLOW");
+    Serial.print("  | pulses/sec: ");
+    Serial.println(pulsesInWindow);
+    
+    // Update Blynk flow rate
+    Blynk.virtualWrite(VPIN_FLOW_RATE, pulsesInWindow);
+    Blynk.virtualWrite(VPIN_FLOW_STATUS, flowDetected ? 1 : 0);
+
+    lastFlowCheck = now;
+  }
+  
+  // Periodic Blynk status update
+  if (now - lastBlynkUpdate >= BLYNK_UPDATE_MS) {
+    updateBlynkStatus();
+    lastBlynkUpdate = now;
+  }
+
+  // Schedule handling once per minute (getLocalTime is cheap)
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    scheduleActions(&timeinfo);
+  }
+
+  // Safety: ensure relay cannot stay ON indefinitely
+  if ((relayOpenState || relayCloseState) && relayOnTimestamp != 0) {
+    if (millis() - relayOnTimestamp > RELAY_MAX_ON_MS) {
+      Serial.println("Safety: Relay exceeded max on time; turning off.");
+      stopValve();
+    }
+  }
+
+  delay(200);
+}
