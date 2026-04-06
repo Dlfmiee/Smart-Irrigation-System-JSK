@@ -21,13 +21,11 @@ bool pumpError = false;
 unsigned long pumpStartTime = 0;
 
 // Valve States
-bool v3_open = false, v4_open = false; // Valve C & D
-bool v7_open = false, v8_open = false; // Valve A & B
-bool rainLockout = false;              // Global Rain (V17)
+bool v3_open = false, v4_open = false; // Valve C & D (V3, V4)
+bool v5_open = false, v6_open = false; // Valve A & B (V5, V6)
+bool rainLockout = false;              // Global Rain (V12)
 
 // Flow Rates 
-float flowC = 0, flowD = 0;
-float flowA = 0, flowB = 0;
 float flowE = 0;
 
 BlynkTimer timer;
@@ -37,7 +35,7 @@ void turnPumpON() {
   digitalWrite(relayPin, LOW); 
   pumpState = true;
   pumpStartTime = millis();
-  Blynk.virtualWrite(V15, 1);
+  Blynk.virtualWrite(V11, 1);
   Serial.println("PUMP ON: Starting Master Cycle Phase.");
 }
 
@@ -45,7 +43,7 @@ void turnPumpOFF() {
   if (!pumpState) return;
   digitalWrite(relayPin, HIGH); 
   pumpState = false;
-  Blynk.virtualWrite(V15, 0);
+  Blynk.virtualWrite(V11, 0);
   Serial.println("PUMP OFF");
 }
 
@@ -54,8 +52,8 @@ void masterResetAll() {
   turnPumpOFF();
   Blynk.virtualWrite(V3, 0); v3_open = false;
   Blynk.virtualWrite(V4, 0); v4_open = false;
-  Blynk.virtualWrite(V7, 0); v7_open = false;
-  Blynk.virtualWrite(V8, 0); v8_open = false;
+  Blynk.virtualWrite(V5, 0); v5_open = false;
+  Blynk.virtualWrite(V6, 0); v6_open = false;
   Serial.println("MASTER: 120s Cycle Finished. System returned to Default State.");
 }
 
@@ -64,7 +62,7 @@ void evaluatePumpState() {
 
   // We only care if an OUTLET valve is open (B or D) to run the pump 
   // (Inlet valves A and C don't strictly require the pump to open)
-  bool anyOutletOpen = (v4_open || v8_open);
+  bool anyOutletOpen = (v4_open || v6_open);
   
   // 1. Turn ON condition
   if (anyOutletOpen && !rainLockout && !pumpError) {
@@ -81,7 +79,7 @@ void evaluatePumpState() {
 
     // 3. Dry-Run Protection (Flow Verification - 15 Seconds)
     if (runTime > 15000 && runTime < 20000) { // Only check once strictly in this window
-      float totalFlow = flowA + flowB + flowC + flowD + flowE;
+      float totalFlow = flowE;
       if (totalFlow < 0.1) {
         Serial.println("DRY RUN DETECTED! No flow after 15s.");
         pumpError = true;
@@ -100,21 +98,17 @@ void evaluatePumpState() {
 
 /* --- Fetch Cloud Data --- */
 void syncCloudData() {
-  Blynk.syncVirtual(V3, V4, V7, V8, V17); 
-  Blynk.syncVirtual(V0, V5, V6, V9, V10); 
+  Blynk.syncVirtual(V3, V4, V5, V6, V12); 
+  Blynk.syncVirtual(V0); 
 }
 
 BLYNK_WRITE(V3) { v3_open = param.asInt() == 1; }
 BLYNK_WRITE(V4) { v4_open = param.asInt() == 1; }
-BLYNK_WRITE(V7) { v7_open = param.asInt() == 1; }
-BLYNK_WRITE(V8) { v8_open = param.asInt() == 1; }
-BLYNK_WRITE(V17){ rainLockout = param.asInt() == 1; }
+BLYNK_WRITE(V5) { v5_open = param.asInt() == 1; }
+BLYNK_WRITE(V6) { v6_open = param.asInt() == 1; }
+BLYNK_WRITE(V12){ rainLockout = param.asInt() == 1; }
 
 BLYNK_WRITE(V0) { flowE = param.asFloat(); }
-BLYNK_WRITE(V5) { flowC = param.asFloat(); }
-BLYNK_WRITE(V6) { flowD = param.asFloat(); }
-BLYNK_WRITE(V9) { flowA = param.asFloat(); }
-BLYNK_WRITE(V10){ flowB = param.asFloat(); }
 
 void setup() {
   Serial.begin(115200);

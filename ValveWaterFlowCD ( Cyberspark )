@@ -13,17 +13,6 @@ const char* POSIX_TZ = "MYT-8";
 
 #define RELAY_C_PIN 26    // Valve C (Inlet - Water)
 #define RELAY_D_PIN 27    // Valve D (Outlet - Water)
-#define FLOW_SENSOR_C_PIN 13  
-#define FLOW_SENSOR_D_PIN 14  
-
-volatile int pulseCountC = 0;
-volatile int pulseCountD = 0;
-float flowRateC = 0.0;
-float flowRateD = 0.0;
-unsigned long oldTimeC = 0;
-unsigned long oldTimeD = 0;
-
-const float calibrationFactor = 450.0; 
 BlynkTimer timer;
 
 bool rainLockout = false;
@@ -33,26 +22,10 @@ int lastTriggerHour = -1;
 unsigned long valveCTimer = 0;
 bool valveCHalfOpening = false;
 
-void IRAM_ATTR pulseCounterC() { pulseCountC++; }
-void IRAM_ATTR pulseCounterD() { pulseCountD++; }
-
-void calculateFlow() {
-  unsigned long currentTime = millis();
-  if ((currentTime - oldTimeC) >= 1000) {
-    flowRateC = ((1000.0 / (millis() - oldTimeC)) * pulseCountC) / (calibrationFactor / 60.0);
-    oldTimeC = millis(); pulseCountC = 0;
-    Blynk.virtualWrite(V5, flowRateC);
-  }
-  if ((currentTime - oldTimeD) >= 1000) {
-    flowRateD = ((1000.0 / (millis() - oldTimeD)) * pulseCountD) / (calibrationFactor / 60.0);
-    oldTimeD = millis(); pulseCountD = 0;
-    Blynk.virtualWrite(V6, flowRateD);
-  }
-}
 
 void forceCloseAB() {
-  Blynk.virtualWrite(V7, 0);
-  Blynk.virtualWrite(V8, 0);
+  Blynk.virtualWrite(V5, 0);
+  Blynk.virtualWrite(V6, 0);
 }
 
 // VALVE C - INLET (Half-Open Logic)
@@ -112,10 +85,10 @@ void checkSchedule() {
   }
 }
 
-BLYNK_WRITE(V17) { rainLockout = param.asInt() == 1; }
+BLYNK_WRITE(V12) { rainLockout = param.asInt() == 1; }
 BLYNK_WRITE(V3) { if (param.asInt()) openValveC_Half(); else closeValveC(); }
 BLYNK_WRITE(V4) { if (param.asInt()) openValveD(); else closeValveD(); }
-BLYNK_CONNECTED() { Blynk.syncVirtual(V17); }
+BLYNK_CONNECTED() { Blynk.syncVirtual(V12); }
 
 void setup() {
   Serial.begin(115200);
@@ -124,16 +97,12 @@ void setup() {
   digitalWrite(RELAY_C_PIN, HIGH); 
   digitalWrite(RELAY_D_PIN, HIGH); 
   
-  pinMode(FLOW_SENSOR_C_PIN, INPUT_PULLUP);
-  pinMode(FLOW_SENSOR_D_PIN, INPUT_PULLUP);
-  attachInterrupt(FLOW_SENSOR_C_PIN, pulseCounterC, FALLING);
-  attachInterrupt(FLOW_SENSOR_D_PIN, pulseCounterD, FALLING);
+
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
   
   timer.setInterval(100L, processMotorTiming);
-  timer.setInterval(1000L, calculateFlow);
   timer.setInterval(15000L, checkSchedule);
 }
 

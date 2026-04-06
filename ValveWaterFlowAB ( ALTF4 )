@@ -13,17 +13,6 @@ const char* POSIX_TZ = "MYT-8";
 
 #define RELAY_A_PIN 25    // Valve A (Inlet - Fertilizer)
 #define RELAY_B_PIN 26    // Valve B (Outlet - Fertilizer)
-#define FLOW_SENSOR_A_PIN 4  
-#define FLOW_SENSOR_B_PIN 5  
-
-volatile int pulseCountA = 0;
-volatile int pulseCountB = 0;
-float flowRateA = 0.0;
-float flowRateB = 0.0;
-unsigned long oldTimeA = 0;
-unsigned long oldTimeB = 0;
-
-const float calibrationFactor = 450.0; 
 BlynkTimer timer;
 
 bool rainLockout = false;
@@ -33,22 +22,6 @@ int lastOpenDay = -1;
 unsigned long valveATimer = 0;
 bool valveAHalfOpening = false;
 
-void IRAM_ATTR pulseCounterA() { pulseCountA++; }
-void IRAM_ATTR pulseCounterB() { pulseCountB++; }
-
-void calculateFlow() {
-  unsigned long currentTime = millis();
-  if ((currentTime - oldTimeA) >= 1000) {
-    flowRateA = ((1000.0 / (millis() - oldTimeA)) * pulseCountA) / (calibrationFactor / 60.0);
-    oldTimeA = millis(); pulseCountA = 0;
-    Blynk.virtualWrite(V9, flowRateA);
-  }
-  if ((currentTime - oldTimeB) >= 1000) {
-    flowRateB = ((1000.0 / (millis() - oldTimeB)) * pulseCountB) / (calibrationFactor / 60.0);
-    oldTimeB = millis(); pulseCountB = 0;
-    Blynk.virtualWrite(V10, flowRateB);
-  }
-}
 
 void forceCloseCD() {
   Blynk.virtualWrite(V3, 0);
@@ -58,7 +31,7 @@ void forceCloseCD() {
 // VALVE A - INLET (Half-Open Logic)
 void openValveA_Half() { 
   digitalWrite(RELAY_A_PIN, LOW); 
-  Blynk.virtualWrite(V7, 1); 
+  Blynk.virtualWrite(V5, 1); 
   valveAHalfOpening = true;
   valveATimer = millis();
   Serial.println("Valve A (Inlet) Opening for 5s..."); 
@@ -67,20 +40,20 @@ void openValveA_Half() {
 void closeValveA() { 
   digitalWrite(RELAY_A_PIN, HIGH); 
   valveAHalfOpening = false;
-  Blynk.virtualWrite(V7, 0); 
+  Blynk.virtualWrite(V5, 0); 
   Serial.println("Valve A (Inlet) Command Closed"); 
 }
 
 // VALVE B - OUTLET (Full-Open Logic)
 void openValveB() { 
   digitalWrite(RELAY_B_PIN, LOW); 
-  Blynk.virtualWrite(V8, 1); 
+  Blynk.virtualWrite(V6, 1); 
   Serial.println("Valve B (Outlet) Opened Fully"); 
   forceCloseCD(); 
 }
 void closeValveB() { 
   digitalWrite(RELAY_B_PIN, HIGH); 
-  Blynk.virtualWrite(V8, 0); 
+  Blynk.virtualWrite(V6, 0); 
   Serial.println("Valve B (Outlet) Command Closed"); 
 }
 
@@ -109,10 +82,10 @@ void checkSchedule() {
   }
 }
 
-BLYNK_WRITE(V17) { rainLockout = param.asInt() == 1; }
-BLYNK_WRITE(V7) { if (param.asInt()) openValveA_Half(); else closeValveA(); }
-BLYNK_WRITE(V8) { if (param.asInt()) openValveB(); else closeValveB(); }
-BLYNK_CONNECTED() { Blynk.syncVirtual(V17); }
+BLYNK_WRITE(V12) { rainLockout = param.asInt() == 1; }
+BLYNK_WRITE(V5) { if (param.asInt()) openValveA_Half(); else closeValveA(); }
+BLYNK_WRITE(V6) { if (param.asInt()) openValveB(); else closeValveB(); }
+BLYNK_CONNECTED() { Blynk.syncVirtual(V12); }
 
 void setup() {
   Serial.begin(115200);
@@ -121,16 +94,12 @@ void setup() {
   digitalWrite(RELAY_A_PIN, HIGH);
   digitalWrite(RELAY_B_PIN, HIGH);
   
-  pinMode(FLOW_SENSOR_A_PIN, INPUT_PULLUP);
-  pinMode(FLOW_SENSOR_B_PIN, INPUT_PULLUP);
-  attachInterrupt(FLOW_SENSOR_A_PIN, pulseCounterA, FALLING);
-  attachInterrupt(FLOW_SENSOR_B_PIN, pulseCounterB, FALLING);
+
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
   
   timer.setInterval(100L, processMotorTiming); // Fast check for the 5s timer
-  timer.setInterval(1000L, calculateFlow);
   timer.setInterval(15000L, checkSchedule);
 }
 

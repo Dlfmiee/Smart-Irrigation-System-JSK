@@ -23,7 +23,7 @@ BlynkTimer timer;
 void sendData() {
   float rainfall = tipCount * RAIN_PER_TIP;
 
-  Blynk.virtualWrite(V12, rainfall);
+  Blynk.virtualWrite(V8, rainfall);
 
   Serial.print("Rainfall: ");
   Serial.print(rainfall);
@@ -31,8 +31,8 @@ void sendData() {
   
   // Composite Rain Lockout
   if (rainfall >= LOCKOUT_THRESHOLD) {
-    Blynk.virtualWrite(V17, 1);
-    Serial.println("High Rainfall! Triggering Rain Lockout (V17).");
+    Blynk.virtualWrite(V12, 1);
+    Serial.println("High Rainfall! Triggering Rain Lockout (V12).");
   }
 }
 

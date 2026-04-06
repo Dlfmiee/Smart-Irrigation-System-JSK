@@ -21,25 +21,25 @@ int lastResetDay = -1;
 void readRainSensor()
 {
   int rainValue = analogRead(RAIN_SENSOR_PIN);
-  Blynk.virtualWrite(V14, rainValue);
+  Blynk.virtualWrite(V9, rainValue);
 
   // Rain threshold (adjust according to calibration)
   if (rainValue < 2000)   // Raining
   {
     digitalWrite(LED_PIN, HIGH);
-    Blynk.virtualWrite(V13, "RAINING");
+    Blynk.virtualWrite(V10, "RAINING");
     
     // Activate global rain lockout if not already active
     if (!rainLockout) {
       rainLockout = true;
-      Blynk.virtualWrite(V17, 1);
-      Serial.println("Rain detected! Setting Global Rain Lockout (V17) to ON.");
+      Blynk.virtualWrite(V12, 1);
+      Serial.println("Rain detected! Setting Global Rain Lockout (V12) to ON.");
     }
   }
   else
   {
     digitalWrite(LED_PIN, LOW);
-    Blynk.virtualWrite(V13, "NO RAIN");
+    Blynk.virtualWrite(V10, "NO RAIN");
   }
 }
 
@@ -50,21 +50,21 @@ void checkMidnightReset() {
     if (timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
       if (lastResetDay != timeinfo.tm_mday) {
         rainLockout = false;
-        Blynk.virtualWrite(V17, 0); // Clear lockout in the cloud
+        Blynk.virtualWrite(V12, 0); // Clear lockout in the cloud
         lastResetDay = timeinfo.tm_mday;
-        Serial.println("Midnight Reached! Rain Lockout (V17) has been RESET.");
+        Serial.println("Midnight Reached! Rain Lockout (V12) has been RESET.");
       }
     }
   }
 }
 
 // Read lockout from cloud just in case of ESP restart
-BLYNK_WRITE(V17) {
+BLYNK_WRITE(V12) {
   rainLockout = param.asInt() == 1;
 }
 
 BLYNK_CONNECTED() {
-  Blynk.syncVirtual(V17); // Sync Rain Lockout state
+  Blynk.syncVirtual(V12); // Sync Rain Lockout state
 }
 
 void setup()

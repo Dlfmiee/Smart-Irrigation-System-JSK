@@ -47,12 +47,12 @@ void sendMoistureToBlynk() {
   Serial.println();
 
   // Send to Blynk
-  Blynk.virtualWrite(V11, soilAverage);
+  Blynk.virtualWrite(V7, soilAverage);
 
   // Composite Rain Lockout: If soil is extremely wet, lock out system
   if (soilAverage < wetThreshold) {
-      Blynk.virtualWrite(V17, 1);
-      Serial.println("Soil extremely wet! Triggering Rain Lockout (V17).");
+      Blynk.virtualWrite(V12, 1);
+      Serial.println("Soil extremely wet! Triggering Rain Lockout (V12).");
   }
 }
 
