@@ -100,7 +100,7 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(5000L, sendData); // Send to Blynk every 5 seconds
+  timer.setInterval(60000L, sendData); // Send to Blynk every 1 minute
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 
   // Attach Interrupt to GPIO 27 - Triggers on FALLING edge (HIGH to LOW)
