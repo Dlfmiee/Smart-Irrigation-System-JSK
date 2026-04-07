@@ -39,6 +39,13 @@ void sendFlowRate() {
   Serial.print(flowRate, 3);
   Serial.println(" L/sec");
 
+  // Update LED state: ON if flow, OFF if no flow
+  if (count > 0) {
+    digitalWrite(LED_PIN, HIGH); // ON (active HIGH)
+  } else {
+    digitalWrite(LED_PIN, LOW); // OFF
+  }
+
   // Delta check: only send to Blynk if value changed by more than 0.05
   if (abs(flowRate - lastFlowRate) > 0.05) {
     Blynk.virtualWrite(V0, flowRate);
@@ -79,12 +86,17 @@ void setup() {
 
   pinMode(LED_PIN, OUTPUT);
 
-  digitalWrite(LED_PIN, LOW);   // 🔥 LED ALWAYS ON (active LOW wiring)
+  digitalWrite(LED_PIN, LOW);   // Start with LED OFF (active HIGH wiring)
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
   // Hardware Watchdog: reboot if loop freezes for 30 seconds
-  esp_task_wdt_init(30, true);
+  esp_task_wdt_config_t twdt_config = {
+      .timeout_ms = 30000,
+      .idle_core_mask = 0,
+      .trigger_panic = true,
+  };
+  esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
   timer.setInterval(60000L, sendFlowRate);
