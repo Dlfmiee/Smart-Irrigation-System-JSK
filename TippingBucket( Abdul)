@@ -17,15 +17,27 @@ const int REED_PIN = 27;
 const float RAIN_PER_TIP = 0.2;
 const float LOCKOUT_THRESHOLD = 5.0; // Trigger lockout at 5mm
 
-unsigned long tipCount = 0;
-bool lastState = HIGH;
-unsigned long lastDebounceTime = 0;
+volatile unsigned long tipCount = 0;
+volatile unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 150;
+
+// Flag to track when a tip has occurred for serial printing
+volatile bool tipOccurred = false;
+
+// Interrupt Service Routine (ISR) - Runs instantly on signal
+void IRAM_ATTR handleTip() {
+  unsigned long now = millis();
+  if (now - lastDebounceTime > debounceDelay) {
+    tipCount++;
+    lastDebounceTime = now;
+    tipOccurred = true; 
+  }
+}
 
 BlynkTimer timer;
 float lastRainfall = -1; // For delta logging
 
-// Hantar hanya rainfall
+// Hantar data ke Blynk
 void sendData() {
   float rainfall = tipCount * RAIN_PER_TIP;
 
@@ -88,8 +100,11 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(60000L, sendData);
+  timer.setInterval(5000L, sendData); // Send to Blynk every 5 seconds
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
+
+  // Attach Interrupt to GPIO 27 - Triggers on FALLING edge (HIGH to LOW)
+  attachInterrupt(digitalPinToInterrupt(REED_PIN), handleTip, FALLING);
 }
 
 void loop() {
@@ -97,19 +112,10 @@ void loop() {
   timer.run();
   esp_task_wdt_reset(); // Feed watchdog to prevent reboot
 
-  bool currentState = digitalRead(REED_PIN);
-
-  if (lastState == HIGH && currentState == LOW) {
-    unsigned long now = millis();
-
-    if (now - lastDebounceTime > debounceDelay) {
-      tipCount++;
-      lastDebounceTime = now;
-
-      Serial.print("Tip: ");
-      Serial.println(tipCount);
-    }
+  // Print tip message in loop instead of ISR to keep ISR fast
+  if (tipOccurred) {
+    tipOccurred = false;
+    Serial.print("Tip detected! Total count: ");
+    Serial.println(tipCount);
   }
-
-  lastState = currentState;
 }
