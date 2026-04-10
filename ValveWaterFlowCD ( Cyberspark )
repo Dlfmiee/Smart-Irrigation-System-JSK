@@ -29,8 +29,8 @@ bool wateringActive = false;
 const unsigned long WATERING_DURATION = 1800000; // 30 MINIT
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
 void forceCloseAB() {
   Blynk.virtualWrite(V5, 0);

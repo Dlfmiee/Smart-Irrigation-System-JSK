@@ -12,8 +12,8 @@
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 const char* POSIX_TZ = "MYT-8"; 
 
 #define RELAY_A_PIN 25    // Valve A (Inlet - Fertilizer)

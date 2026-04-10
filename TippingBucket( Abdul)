@@ -12,8 +12,8 @@
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; // DTBuddy
 
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
 const int REED_PIN = 27;
 const int WIFI_LED_PIN = 2; // Built-in Wi-Fi Status LED

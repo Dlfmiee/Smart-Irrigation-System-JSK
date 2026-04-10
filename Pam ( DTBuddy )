@@ -12,8 +12,8 @@ const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFV
 
 /* --- Blynk Credentials --- */
 char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; 
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
 /* --- Pins --- */
 const int relayPin = 26;   // ACTIVE-LOW

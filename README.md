@@ -34,8 +34,8 @@ The system runs two primary automated sessions per day:
 ---
 
 ## ⚙️ Configuration
-*   **WIFI SSID**: `WiFi JSK`
-*   **WIFI Pass**: `vhwau35565`
+*   **WIFI SSID**: `Fmz`
+*   **WIFI Pass**: `iiiiiiii`
 *   **Timezone**: GMT+8 (Malaysia)
 *   **Time Sync**: Automatically synchronized via NTP.
 
