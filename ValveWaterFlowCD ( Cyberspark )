@@ -108,10 +108,10 @@ void processMotorTiming() {
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, LOW);   // 🔆 LED ON - WiFi OK
+    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
     Serial.println("✅ WiFi OK");
   } else {
-    digitalWrite(WIFI_LED_PIN, HIGH);  // ⚫ LED OFF - WiFi Lost
+    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
     Serial.println("📶 WiFi reconnect...");
     WiFi.begin(ssid, pass);
   }
@@ -194,7 +194,7 @@ void setup() {
   pinMode(WIFI_LED_PIN, OUTPUT);
   pinMode(RELAY_C_PIN, OUTPUT);
   pinMode(RELAY_D_PIN, OUTPUT);
-  digitalWrite(WIFI_LED_PIN, HIGH);     // LED OFF
+  digitalWrite(WIFI_LED_PIN, LOW);     // LED OFF
   digitalWrite(RELAY_C_PIN, HIGH); 
   digitalWrite(RELAY_D_PIN, HIGH); 
 

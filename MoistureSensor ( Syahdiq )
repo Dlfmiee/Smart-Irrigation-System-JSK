@@ -139,10 +139,10 @@ void logToGoogleSheets() {
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, LOW);   // 🔆 LED ON - WiFi OK
+    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
     Serial.println("✅ WiFi OK");
   } else {
-    digitalWrite(WIFI_LED_PIN, HIGH);  // ⚫ LED OFF - WiFi Lost
+    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
     Serial.println("📶 WiFi reconnect...");
     WiFi.begin(ssid, pass);
   }
@@ -156,7 +156,7 @@ void setup() {
   pinMode(SOIL2, INPUT);
   pinMode(SOIL3, INPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
-  digitalWrite(WIFI_LED_PIN, HIGH);
+  digitalWrite(WIFI_LED_PIN, LOW);
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 

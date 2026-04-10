@@ -136,10 +136,10 @@ void syncCloudData() {
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(wifiLedPin, LOW);   // 🔆 LED ON - WiFi OK
+    digitalWrite(wifiLedPin, HIGH);   // 🔆 LED ON - WiFi OK
     Serial.println("✅ WiFi OK");
   } else {
-    digitalWrite(wifiLedPin, HIGH);  // ⚫ LED OFF - WiFi Lost
+    digitalWrite(wifiLedPin, LOW);  // ⚫ LED OFF - WiFi Lost
     Serial.println("📶 WiFi reconnect...");
     WiFi.begin(ssid, pass);
   }
@@ -181,7 +181,7 @@ void setup() {
   pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
   pinMode(wifiLedPin, OUTPUT);
-  digitalWrite(wifiLedPin, HIGH); // Default OFF
+  digitalWrite(wifiLedPin, LOW); // Default OFF
   
   digitalWrite(relayPin, HIGH); // Default OFF
   updateLED();                  // Sync custom LED with initial relay state
