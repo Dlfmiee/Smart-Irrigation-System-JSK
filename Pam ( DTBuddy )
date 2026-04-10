@@ -189,7 +189,8 @@ void setup() {
   // Visual feedback
   startupBlink(5, 200);
 
-  Blynk.begin(auth, ssid, pass);
+  WiFi.begin(ssid, pass);
+  Blynk.config(auth);
 
   esp_task_wdt_config_t twdt_config = {
       .timeout_ms = 30000,

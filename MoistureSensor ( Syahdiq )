@@ -158,7 +158,8 @@ void setup() {
   pinMode(WIFI_LED_PIN, OUTPUT);
   digitalWrite(WIFI_LED_PIN, LOW);
 
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  WiFi.begin(ssid, pass);
+  Blynk.config(BLYNK_AUTH_TOKEN);
 
   esp_task_wdt_config_t twdt_config = {
     .timeout_ms = 30000,

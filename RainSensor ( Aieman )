@@ -159,7 +159,8 @@ void setup() {
   digitalWrite(WIFI_LED_PIN, LOW);
 
   // Connect WiFi + Blynk
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  WiFi.begin(ssid, pass);
+  Blynk.config(BLYNK_AUTH_TOKEN);
 
   // Malaysia Time (GMT+8)
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");

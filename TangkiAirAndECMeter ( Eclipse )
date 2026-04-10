@@ -124,7 +124,8 @@ void setup() {
   digitalWrite(LED_PIN, HIGH);
   digitalWrite(WIFI_LED_PIN, LOW);
 
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  WiFi.begin(ssid, pass);
+  Blynk.config(BLYNK_AUTH_TOKEN);
 
   // Hardware Watchdog: reboot if loop freezes for 30 seconds
   esp_task_wdt_config_t twdt_config = {

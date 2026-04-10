@@ -19,9 +19,6 @@ bool rainLockout = false;
 int lastTriggerHour = -1;
 
 // Valve timing
-unsigned long valveCTimer = 0;
-bool valveCHalfOpening = false;
-bool valveCIsHalfOpen = false;
 
 // 30 MINIT SIRAM
 unsigned long wateringStartTime = 0;
@@ -37,20 +34,16 @@ void forceCloseAB() {
   Blynk.virtualWrite(V6, 0);
 }
 
-// VALVE C - HALF OPEN (5s)
-void openValveC_Half() { 
+// VALVE C - FULL OPEN
+void openValveC() { 
   digitalWrite(RELAY_C_PIN, LOW); 
   Blynk.virtualWrite(V3, 1); 
-  valveCHalfOpening = true;
-  valveCTimer = millis();
-  Serial.println("🔓 Valve C: Opening 5s (Half)...");
+  Serial.println("🔓 Valve C: Full Open");
   forceCloseAB();
 }
 
 void closeValveC() { 
   digitalWrite(RELAY_C_PIN, HIGH); 
-  valveCHalfOpening = false;
-  valveCIsHalfOpen = false;
   Blynk.virtualWrite(V3, 0); 
   Serial.println("🔒 Valve C: Closed");
 }
@@ -73,7 +66,7 @@ void closeValveD() {
 void startWatering() {
   if (!rainLockout && !wateringActive) {
     Serial.println("🚿 SIRAM 30 MINIT DIMULAKAN!");
-    openValveC_Half();
+    openValveC();
     openValveD();
     wateringActive = true;
     wateringStartTime = millis();
@@ -91,13 +84,6 @@ void stopWatering() {
 }
 
 void processMotorTiming() {
-  // Valve C: Stop motor after 5s (half-open)
-  if (valveCHalfOpening && (millis() - valveCTimer >= 5000)) {
-    digitalWrite(RELAY_C_PIN, HIGH);
-    valveCHalfOpening = false;
-    valveCIsHalfOpen = true;
-    Serial.println("✅ Valve C: Half-Open OK");
-  }
   
   // 30 MINIT AUTO-STOP
   if (wateringActive && (millis() - wateringStartTime >= WATERING_DURATION)) {
@@ -142,7 +128,7 @@ void logToGoogleSheets() {
 
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)) {
-    int valveC_on = valveCIsHalfOpen || valveCHalfOpening;
+    int valveC_on = !digitalRead(RELAY_C_PIN);
     int valveD_on = !digitalRead(RELAY_D_PIN);
     
     String url = String(googleScriptUrl) +
@@ -165,7 +151,7 @@ BLYNK_WRITE(V12) {
 }
 
 BLYNK_WRITE(V3) { 
-  if (param.asInt()) openValveC_Half(); 
+  if (param.asInt()) openValveC(); 
   else closeValveC(); 
 }
 

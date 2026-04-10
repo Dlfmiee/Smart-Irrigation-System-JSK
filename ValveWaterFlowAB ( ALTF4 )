@@ -25,8 +25,6 @@ bool rainLockout = false;
 int lastOpenDay = -1;
 
 // Motorized Valve Timing
-unsigned long valveATimer = 0;
-bool valveAHalfOpening = false;
 
 // 30 MINIT BAJA
 unsigned long fertilizingStartTime = 0;
@@ -39,18 +37,15 @@ void forceCloseCD() {
   Blynk.virtualWrite(V4, 0);
 }
 
-// VALVE A - INLET (Half-Open Logic)
-void openValveA_Half() { 
+// VALVE A - INLET (Full-Open Logic)
+void openValveA() { 
   digitalWrite(RELAY_A_PIN, LOW); 
   Blynk.virtualWrite(V5, 1); 
-  valveAHalfOpening = true;
-  valveATimer = millis();
-  Serial.println("Valve A (Inlet) Opening for 5s..."); 
+  Serial.println("Valve A (Inlet) Opened Fully"); 
   forceCloseCD(); 
 }
 void closeValveA() { 
   digitalWrite(RELAY_A_PIN, HIGH); 
-  valveAHalfOpening = false;
   Blynk.virtualWrite(V5, 0); 
   Serial.println("Valve A (Inlet) Command Closed"); 
 }
@@ -72,7 +67,7 @@ void closeValveB() {
 void startFertilizing() {
   if (!rainLockout && !fertilizingActive) {
     Serial.println("🌿 BAJA 30 MINIT DIMULAKAN!");
-    openValveA_Half();
+    openValveA();
     openValveB();
     fertilizingActive = true;
     fertilizingStartTime = millis();
@@ -90,13 +85,6 @@ void stopFertilizing() {
 }
 
 void processMotorTiming() {
-  // Pause Valve A after 5 seconds to achieve "Half-Open"
-  if (valveAHalfOpening && (millis() - valveATimer >= 5000)) {
-    digitalWrite(RELAY_A_PIN, HIGH); // Cut power to stop motor half-way
-    valveAHalfOpening = false;
-    Serial.println("Valve A (Inlet) Paused at Half-Open to reduce pressure.");
-  }
-
   // 30 MINIT AUTO-STOP
   if (fertilizingActive && (millis() - fertilizingStartTime >= FERTILIZING_DURATION)) {
     Serial.println("⏰ 30 MINIT SELESAI - AUTO STOP!");
@@ -120,7 +108,7 @@ void checkSchedule() {
 }
 
 BLYNK_WRITE(V12) { rainLockout = param.asInt() == 1; }
-BLYNK_WRITE(V5) { if (param.asInt()) openValveA_Half(); else closeValveA(); }
+BLYNK_WRITE(V5) { if (param.asInt()) openValveA(); else closeValveA(); }
 BLYNK_WRITE(V6) { if (param.asInt()) openValveB(); else closeValveB(); }
 BLYNK_CONNECTED() { Blynk.syncVirtual(V12); }
 
@@ -131,7 +119,7 @@ void logToGoogleSheets() {
     HTTPClient http;
 
     // Read relay state. 
-    int valveA_on = !digitalRead(RELAY_A_PIN) || valveAHalfOpening;
+    int valveA_on = !digitalRead(RELAY_A_PIN);
     int valveB_on = !digitalRead(RELAY_B_PIN);
 
     String statusStr = "VALVE_A:" + String(valveA_on) + "_B:" + String(valveB_on);
@@ -172,9 +160,8 @@ void setup() {
   digitalWrite(RELAY_B_PIN, HIGH);
   digitalWrite(WIFI_LED_PIN, LOW);
   
-
-
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  WiFi.begin(ssid, pass);
+  Blynk.config(BLYNK_AUTH_TOKEN);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
   
   // Hardware Watchdog: reboot if loop freezes for 30 seconds
@@ -186,7 +173,7 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(100L, processMotorTiming); // Fast check for the 5s timer
+  timer.setInterval(100L, processMotorTiming); // Motor & 30 min check
   timer.setInterval(60000L, checkSchedule);
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
