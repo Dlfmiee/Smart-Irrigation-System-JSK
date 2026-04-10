@@ -73,8 +73,11 @@ void logToGoogleSheets() {
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     digitalWrite(WIFI_LED_PIN, LOW);   // 🔆 LED ON - WiFi OK
+    Serial.println("✅ WiFi OK");
   } else {
     digitalWrite(WIFI_LED_PIN, HIGH);  // ⚫ LED OFF - WiFi Lost
+    Serial.println("📶 WiFi reconnect...");
+    WiFi.begin(ssid, pass);
   }
 }
 

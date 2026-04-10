@@ -137,8 +137,11 @@ void syncCloudData() {
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     digitalWrite(wifiLedPin, LOW);   // 🔆 LED ON - WiFi OK
+    Serial.println("✅ WiFi OK");
   } else {
     digitalWrite(wifiLedPin, HIGH);  // ⚫ LED OFF - WiFi Lost
+    Serial.println("📶 WiFi reconnect...");
+    WiFi.begin(ssid, pass);
   }
 }
 
