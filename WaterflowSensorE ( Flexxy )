@@ -15,7 +15,6 @@ char pass[] = "iiiiiiii";
 
 #define FLOW_SENSOR_PIN 27
 #define LED_PIN 26
-#define WIFI_LED_PIN 2
 
 volatile int pulseCount = 0;
 float flowRate = 0;
@@ -72,10 +71,8 @@ void logToGoogleSheets() {
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
     Serial.println("✅ WiFi OK");
   } else {
-    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
     Serial.println("📶 WiFi reconnect...");
     WiFi.begin(ssid, pass);
   }
@@ -87,8 +84,6 @@ void setup() {
   Serial.println("\n=== WATERFLOW SENSOR E (2s INTERVAL) ===");
 
   pinMode(LED_PIN, OUTPUT);
-  pinMode(WIFI_LED_PIN, OUTPUT);
-  digitalWrite(WIFI_LED_PIN, LOW); // Default OFF
   // Initial LED Test
   for(int i=0; i<3; i++) {
     digitalWrite(LED_PIN, HIGH); delay(100);
@@ -109,7 +104,7 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(2000L, sendFlowRate);      // Faster update (2 seconds)
+  timer.setInterval(5000L, sendFlowRate);      // Balanced update (5 seconds)
   timer.setInterval(10000L, checkWiFi);        // WiFi status updates
   timer.setInterval(300000L, logToGoogleSheets); // 5 minutes
   Serial.println("=== SETUP COMPLETE ===");
@@ -121,9 +116,11 @@ void loop() {
   esp_task_wdt_reset(); 
 
   // Real-time LED feedback: Turn ON if pulse was detected in the last 1.5 seconds
-  if (millis() - lastPulseTime < 1500 && lastPulseTime > 0) {
-    digitalWrite(LED_PIN, HIGH);
-  } else {
-    digitalWrite(LED_PIN, LOW);
+  static bool currentLedState = false;
+  bool shouldBeOn = (millis() - lastPulseTime < 1500 && lastPulseTime > 0);
+
+  if (shouldBeOn != currentLedState) {
+    currentLedState = shouldBeOn;
+    digitalWrite(LED_PIN, currentLedState ? HIGH : LOW);
   }
 }

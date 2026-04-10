@@ -200,7 +200,7 @@ void setup() {
   esp_task_wdt_add(NULL);
 
   timer.setInterval(1000L, evaluatePumpState); // High responsiveness
-  timer.setInterval(10000L, syncCloudData);
+  timer.setInterval(5000L, syncCloudData);
   timer.setInterval(10000L, checkWiFi);         // WiFi indicator update
   timer.setInterval(300000L, logToGoogleSheets);
   
