@@ -6,12 +6,13 @@
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 #include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 const int REED_PIN = 27;
 const float RAIN_PER_TIP = 0.2;
@@ -24,6 +25,10 @@ const unsigned long debounceDelay = 150;
 // Flag to track when a tip has occurred for serial printing
 volatile bool tipOccurred = false;
 
+// Trackers for logic
+unsigned long lastBlynkTipCount = 0;
+int lastResetDay = -1;
+
 // Interrupt Service Routine (ISR) - Runs instantly on signal
 void IRAM_ATTR handleTip() {
   unsigned long now = millis();
@@ -35,27 +40,54 @@ void IRAM_ATTR handleTip() {
 }
 
 BlynkTimer timer;
-float lastRainfall = -1; // For delta logging
+
+void checkMidnightReset() {
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)) {
+    // Reset exactly at midnight (00:00)
+    if (timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
+      if (lastResetDay != timeinfo.tm_mday) {
+        tipCount = 0;
+        lastBlynkTipCount = 0;
+        lastResetDay = timeinfo.tm_mday;
+        Serial.println("Midnight! Rain counter has been RESET.");
+      }
+    }
+  }
+}
 
 // Hantar data ke Blynk
 void sendData() {
-  float rainfall = tipCount * RAIN_PER_TIP;
+  unsigned long currentTips = tipCount;
+  unsigned long deltaTips = 0;
 
-  // Delta check: only send if changed by more than 0.1mm
-  if (abs(rainfall - lastRainfall) > 0.1) {
-    Blynk.virtualWrite(V8, rainfall);
-    lastRainfall = rainfall;
-    Serial.println("[BLYNK] Sent rainfall.");
+  // Handle wrap-around or reset cases
+  if (currentTips >= lastBlynkTipCount) {
+    deltaTips = currentTips - lastBlynkTipCount;
   } else {
-    Serial.println("[DELTA] No change, skipping Blynk.");
+    deltaTips = currentTips; // Reset occurred
   }
 
-  Serial.print("Rainfall: ");
-  Serial.print(rainfall);
+  float incrementalRainfall = deltaTips * RAIN_PER_TIP;
+  float totalRainfall = currentTips * RAIN_PER_TIP;
+
+  // Only send to Blynk if rain occurred in the last interval
+  if (deltaTips > 0) {
+    Blynk.virtualWrite(V8, incrementalRainfall);
+    lastBlynkTipCount = currentTips;
+    Serial.print("[BLYNK] Sent Incremental: ");
+    Serial.print(incrementalRainfall);
+    Serial.println(" mm");
+  } else {
+    Serial.println("[BLYNK] No new rain, skipping update.");
+  }
+
+  Serial.print("Total Rainfall: ");
+  Serial.print(totalRainfall);
   Serial.println(" mm");
   
-  // Composite Rain Lockout
-  if (rainfall >= LOCKOUT_THRESHOLD) {
+  // Composite Rain Lockout based on TOTAL
+  if (totalRainfall >= LOCKOUT_THRESHOLD) {
     Blynk.virtualWrite(V12, 1);
     Serial.println("High Rainfall! Triggering Rain Lockout (V12).");
   }
@@ -100,7 +132,11 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
+  // Set Timezone Malaysia (GMT+8)
+  configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
+
   timer.setInterval(60000L, sendData); // Send to Blynk every 1 minute
+  timer.setInterval(30000L, checkMidnightReset); // Check reset every 30s
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 
   // Attach Interrupt to GPIO 27 - Triggers on FALLING edge (HIGH to LOW)
