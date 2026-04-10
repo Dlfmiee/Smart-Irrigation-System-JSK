@@ -12,8 +12,8 @@ const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFV
 
 /* --- Blynk Credentials --- */
 char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; 
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
 /* --- Pins --- */
 const int relayPin = 26;   // ACTIVE-LOW
@@ -21,20 +21,40 @@ const int ledPin   = 27;
 
 /* --- State Variables --- */
 bool pumpState = false;
-bool manualOverride = false;
 bool pumpError = false;      
 unsigned long pumpStartTime = 0;
 
-// Valve States
-bool v3_open = false, v4_open = false; // Valve C & D (V3, V4)
-bool v5_open = false, v6_open = false; // Valve A & B (V5, V6)
+// Valve & Cloud States
+bool v3_open = false, v4_open = false; // Valve C & D
+bool v5_open = false, v6_open = false; // Valve A & B
 bool rainLockout = false;              // Global Rain (V12)
-
-// Flow Rates 
 float flowE = 0;
 
+/* 
+  Pump Mode (V13):
+  0 = AUTO (Default)
+  1 = MANUAL ON (Force)
+  2 = MANUAL OFF (Force Stop)
+*/
+int pumpMode = 0; 
+
 BlynkTimer timer;
-bool lastPumpState = false; // For delta logging
+
+// ================== HELPER FUNCTIONS ==================
+
+void updateLED() {
+  // Sync LED with active relay state
+  digitalWrite(ledPin, !digitalRead(relayPin)); 
+}
+
+void startupBlink(int count, int speed) {
+  for(int i=0; i<count; i++) {
+    digitalWrite(ledPin, LOW); delay(speed);
+    digitalWrite(ledPin, HIGH); delay(speed);
+  }
+}
+
+// ================== CORE FUNCTIONS ==================
 
 void turnPumpON() {
   if (pumpState) return;
@@ -42,7 +62,8 @@ void turnPumpON() {
   pumpState = true;
   pumpStartTime = millis();
   Blynk.virtualWrite(V11, 1);
-  Serial.println("PUMP ON: Starting Master Cycle Phase.");
+  updateLED();
+  Serial.println("[SYSTEM] PUMP ON");
 }
 
 void turnPumpOFF() {
@@ -50,61 +71,65 @@ void turnPumpOFF() {
   digitalWrite(relayPin, HIGH); 
   pumpState = false;
   Blynk.virtualWrite(V11, 0);
-  Serial.println("PUMP OFF");
+  updateLED();
+  Serial.println("[SYSTEM] PUMP OFF");
 }
 
 void masterResetAll() {
-  // Master Controller enforces Default Mode (All Closed)
   turnPumpOFF();
   Blynk.virtualWrite(V3, 0); v3_open = false;
   Blynk.virtualWrite(V4, 0); v4_open = false;
   Blynk.virtualWrite(V5, 0); v5_open = false;
   Blynk.virtualWrite(V6, 0); v6_open = false;
-  Serial.println("MASTER: 120s Cycle Finished. System returned to Default State.");
+  Serial.println("MASTER: 30-Minute Cycle Finished. System Reset.");
 }
 
-/* --- Core Smart Pump Logic --- */
 void evaluatePumpState() {
-
-  // We only care if an OUTLET valve is open (B or D) to run the pump 
-  // (Inlet valves A and C don't strictly require the pump to open)
   bool anyOutletOpen = (v4_open || v6_open);
   
-  // 1. Turn ON condition
-  if (anyOutletOpen && !rainLockout && !pumpError) {
-    turnPumpON();
-  }
-  
-  // 2. Turn OFF conditions
-  if (!anyOutletOpen || rainLockout || pumpError) {
+  // ⛔ PRIORITY 1: Safety Shuts & Force Stop
+  if (rainLockout || pumpError || pumpMode == 2) {
     turnPumpOFF();
+    if (pumpMode == 2) Serial.println("[MODE] Pump Force Disabled");
+  } 
+  // 🚀 PRIORITY 2: Manual Start
+  else if (pumpMode == 1) {
+    turnPumpON();
+    Serial.println("[MODE] Pump Force Started");
+  }
+  // ⚙️ PRIORITY 3: Auto Mode
+  else {
+    if (anyOutletOpen) {
+      turnPumpON();
+    } else {
+      turnPumpOFF();
+    }
   }
 
+  // --- Post-Activation Monitoring (Safety) ---
   if (pumpState && !pumpError) {
     unsigned long runTime = millis() - pumpStartTime;
 
-    // 3. Dry-Run Protection (Flow Verification - 15 Seconds)
-    if (runTime > 15000 && runTime < 20000) { // Only check once strictly in this window
-      float totalFlow = flowE;
-      if (totalFlow < 0.1) {
-        Serial.println("DRY RUN DETECTED! No flow after 15s.");
+    // Dry-Run Protection (15s Window)
+    if (runTime > 15000 && runTime < 20000) {
+      if (flowE < 0.1) {
+        Serial.println("DRY RUN DETECTED! Shutting down.");
         pumpError = true;
-        masterResetAll(); // Shut down entire system to protect hardware
-        Blynk.logEvent("pump_error", "Dry Run Detected! Pump and Valves shut down.");
+        masterResetAll();
+        Blynk.logEvent("pump_error", "Dry Run Detected! Hardware protected.");
         return; 
       }
     }
 
-    // 4. The 2-Minute Unified Cycle Cap (120,000ms)
-    if (runTime >= 120000) {
+    // 30-Minute Master Cap
+    if (runTime >= 1800000) {
       masterResetAll();
     }
   }
 }
 
-/* --- Fetch Cloud Data --- */
 void syncCloudData() {
-  Blynk.syncVirtual(V3, V4, V5, V6, V12); 
+  Blynk.syncVirtual(V3, v4_open, V5, V6, V12); 
   Blynk.syncVirtual(V0); 
 }
 
@@ -114,43 +139,44 @@ void logToGoogleSheets() {
     client.setInsecure();
     HTTPClient http;
 
-    String statusStr = pumpState ? "PUMP_ON" : "PUMP_OFF";
-    if (pumpError) statusStr = "PUMP_ERROR_DRY_RUN";
-
     String url = String(googleScriptUrl) + "?pump=" + String(pumpState);
-
-    Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    int httpCode = http.GET();
-    
-    if (httpCode > 0) {
-      Serial.println("OK (" + String(httpCode) + ")");
-    } else {
-      Serial.println("FAILED (" + http.errorToString(httpCode) + ")");
-    }
+    http.GET();
     http.end();
   }
 }
 
-BLYNK_WRITE(V3) { v3_open = param.asInt() == 1; }
-BLYNK_WRITE(V4) { v4_open = param.asInt() == 1; }
-BLYNK_WRITE(V5) { v5_open = param.asInt() == 1; }
-BLYNK_WRITE(V6) { v6_open = param.asInt() == 1; }
-BLYNK_WRITE(V12){ rainLockout = param.asInt() == 1; }
+// ================== BLYNK HANDLERS ==================
 
+BLYNK_WRITE(V3) { v3_open = param.asInt(); }
+BLYNK_WRITE(V4) { v4_open = param.asInt(); }
+BLYNK_WRITE(V5) { v5_open = param.asInt(); }
+BLYNK_WRITE(V6) { v6_open = param.asInt(); }
+BLYNK_WRITE(V12){ rainLockout = param.asInt(); }
 BLYNK_WRITE(V0) { flowE = param.asFloat(); }
+
+BLYNK_WRITE(V13) {
+  pumpMode = param.asInt();
+  Serial.print("[MODE] New Master Switch State: ");
+  Serial.println(pumpMode);
+}
+
+// ================== SETUP ==================
 
 void setup() {
   Serial.begin(115200);
   pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, HIGH);   
-  digitalWrite(relayPin, HIGH); 
   
+  digitalWrite(relayPin, HIGH); // Default OFF
+  digitalWrite(ledPin, HIGH);   // Default OFF
+
+  // Visual feedback
+  startupBlink(5, 200);
+
   Blynk.begin(auth, ssid, pass);
 
-  // Hardware Watchdog: reboot if loop freezes for 30 seconds
   esp_task_wdt_config_t twdt_config = {
       .timeout_ms = 30000,
       .idle_core_mask = 0,
@@ -159,13 +185,15 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(60000L, evaluatePumpState);
+  timer.setInterval(1000L, evaluatePumpState); // High responsiveness
   timer.setInterval(10000L, syncCloudData);
-  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
+  timer.setInterval(300000L, logToGoogleSheets);
+  
+  Serial.println("[SYSTEM] Pump Node Ready");
 }
 
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
+  esp_task_wdt_reset();
 }

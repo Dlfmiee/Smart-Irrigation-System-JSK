@@ -1,6 +1,6 @@
 #define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN "4q3N1x2CkTYvtH8QbCXCZ49vU9CwoXqO"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -10,9 +10,10 @@
 #include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
+const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; // DTBuddy
 
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
 const int REED_PIN = 27;
 const float RAIN_PER_TIP = 0.2;
@@ -28,6 +29,29 @@ volatile bool tipOccurred = false;
 // Trackers for logic
 unsigned long lastBlynkTipCount = 0;
 int lastResetDay = -1;
+
+/************ BRIDGE TO PUMP ************/
+void shoutToMasterPump(int lockoutValue) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  
+  String url = "https://blynk.cloud/external/api/update?token=" + String(MASTER_PUMP_TOKEN) + "&v12=" + String(lockoutValue);
+  
+  Serial.print("[BRIDGE] Syncing Pump V12 -> ");
+  Serial.println(lockoutValue);
+  
+  http.begin(client, url);
+  int httpCode = http.GET();
+  if (httpCode > 0) {
+    Serial.println("[BRIDGE] Success: " + String(httpCode));
+  } else {
+    Serial.println("[BRIDGE] Failed: " + http.errorToString(httpCode));
+  }
+  http.end();
+}
 
 // Interrupt Service Routine (ISR) - Runs instantly on signal
 void IRAM_ATTR handleTip() {
@@ -51,6 +75,8 @@ void checkMidnightReset() {
         lastBlynkTipCount = 0;
         lastResetDay = timeinfo.tm_mday;
         Serial.println("Midnight! Rain counter has been RESET.");
+        Blynk.virtualWrite(V8, 0.0); // Reset dashboard immediately
+        shoutToMasterPump(0);
       }
     }
   }
@@ -59,30 +85,11 @@ void checkMidnightReset() {
 // Hantar data ke Blynk
 void sendData() {
   unsigned long currentTips = tipCount;
-  unsigned long deltaTips = 0;
-
-  // Handle wrap-around or reset cases
-  if (currentTips >= lastBlynkTipCount) {
-    deltaTips = currentTips - lastBlynkTipCount;
-  } else {
-    deltaTips = currentTips; // Reset occurred
-  }
-
-  float incrementalRainfall = deltaTips * RAIN_PER_TIP;
   float totalRainfall = currentTips * RAIN_PER_TIP;
 
-  // Only send to Blynk if rain occurred in the last interval
-  if (deltaTips > 0) {
-    Blynk.virtualWrite(V8, incrementalRainfall);
-    lastBlynkTipCount = currentTips;
-    Serial.print("[BLYNK] Sent Incremental: ");
-    Serial.print(incrementalRainfall);
-    Serial.println(" mm");
-  } else {
-    Serial.println("[BLYNK] No new rain, skipping update.");
-  }
-
-  Serial.print("Total Rainfall: ");
+  // Send Daily Total to Blynk (V8)
+  Blynk.virtualWrite(V8, totalRainfall);
+  Serial.print("[BLYNK] Daily Total Rainfall: ");
   Serial.print(totalRainfall);
   Serial.println(" mm");
   
@@ -90,6 +97,7 @@ void sendData() {
   if (totalRainfall >= LOCKOUT_THRESHOLD) {
     Blynk.virtualWrite(V12, 1);
     Serial.println("High Rainfall! Triggering Rain Lockout (V12).");
+    shoutToMasterPump(1);
   }
 }
 

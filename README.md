@@ -7,7 +7,7 @@ A high-performance, distributed IoT irrigation solution powered by **8 ESP32 mic
 - **Smart Rain Lockout**: Automatically pauses irrigation if it's raining, if soil moisture is already high, or if there is excessive rainfall today.
 - **Dry-Run Protection**: The pump automatically cuts power if no water flow is detected within 15 seconds.
 - **Optimized Vpin Mapping**: Uses a clean sequence of **13 Virtual Pins (V0-V12)** for real-time monitoring and control.
-- **Automated Scheduling**: Independent timers for Water (4x daily) and Fertilizer (1x daily).
+- **Automated Scheduling**: Independent timers for Water (1x daily) and Fertilizer (1x daily).
 - **Consolidated IoT Logging**: Automatically groups data from all 8 nodes into a single **Google Sheet** row every 5 minutes for long-term observation and 7-day testing.
 - **Hardware Watchdog**: Built-in self-reboot logic on all ESP32 nodes to recover from freezes or WiFi disconnects automatically.
 - **Delta Logging (Blynk Qutoa Protection)**: Only transmits sensor updates to Blynk if a significant change occurs, ensuring 100% operation within the 100k free-tier message limit.

@@ -32,14 +32,14 @@ graph TD
 The system follows a strict schedule using Internet Time (NTP).
 
 ### **Phase A: Fertilizer (Node: ALTF4)**
-- **Time**: 08:00 AM
+- **Time**: 08:00 AM (30 Minutes)
 - **Sequence**:
   1. Open **Valve A** (Inlet) for 5 seconds (Half-Open).
   2. Open **Valve B** (Outlet) Fully.
   3. Master Pump detects Valve B is open and starts pumping.
 
 ### **Phase B: Watering (Node: Cyberspark)**
-- **Times**: 10:00 AM, 12:00 PM, 02:00 PM, 04:00 PM
+- **Time**: 04:00 PM (30 Minutes)
 - **Sequence**:
   1. Open **Valve C** (Inlet) for 5 seconds (Half-Open).
   2. Open **Valve D** (Outlet) Fully.
@@ -54,12 +54,25 @@ Safety is the #1 priority to prevent hardware damage.
 | :--- | :--- | :--- |
 | **Rain Lockout (V12)** | Triggered by Aieman (Rain), Abdul (mm), or Syahdiq (Wet Soil). | All scheduled cycles are **Cancelled**. |
 | **Dry-Run Protection** | Pump (Node: DTBuddy) checks Flow E (Node: Flexxy) after 15s. | If Flow < 0.1 L/min, **Emergency Shutdown** of Pump & Valves. |
-| **2-Minute Cap** | Every cycle is limited to 120 seconds maximum. | Prevents water waste if a sensor fails. |
+| **30-Minute Cap** | Every cycle is limited to 30 minutes (1,800,000ms) maximum. | Prevents water waste if a sensor fails and ensures proper session duration. |
 | **Hardware Watchdog** | All nodes monitor their own loop status. | Automatic **Self-Reboot** within 30s if code freezes. |
 
 ---
 
-## 4. The Data Pipeline (Logging)
+## 4. Manual UI Control (Blynk V13)
+The system includes a **Master Pump Switch** on Virtual Pin **V13** with three operational modes:
+
+| Value | Mode | Description |
+| :--- | :--- | :--- |
+| **0** | **AUTO** | Pump runs only when valves are open (Default). |
+| **1** | **MANUAL ON** | Forces the pump to start immediately (Safety overrides apply). |
+| **2** | **FORCE OFF** | Forces the pump to stay OFF, even if valves are open. |
+
+*Note: Dry-run protection and the 30-minute safety cap remain active in all modes.*
+
+---
+
+## 5. The Data Pipeline (Logging)
 Your 7-day observation data follows this path:
 
 1. **Step 1 (Physical)**: Sensor reads data (e.g., Moisture = 45%).

@@ -1,6 +1,6 @@
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN    "JM9P4q32gJOpSwRtCuwPiQ6iY_IwCGPj"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -9,92 +9,134 @@
 #include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
+const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; // DTBuddy
 
 /************ WIFI ************/
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
-// Soil sensor pins (ADC pins on ESP32)
+// Soil sensor pins
 #define SOIL1 34
 #define SOIL2 35
 #define SOIL3 32
 
-// Adjust this value after calibration
-// Higher value = drier soil
-int dryThreshold = 2500;
-int wetThreshold = 1800; // Too wet, prevent watering
+// Calibration values
+int dryThreshold = 2500;   // 0%
+int wetThreshold = 1800;   // 100%
 
 bool soil1Dry;
 bool soil2Dry;
 bool soil3Dry;
 
 BlynkTimer timer;
-int lastSoilAvg = -1; // For delta logging
+int lastSoilAvg = -1;
 
+/************ CONVERT TO % ************/
+int convertToPercentage(int value) {
+  int percent = map(value, dryThreshold, wetThreshold, 0, 100);
+
+  if (percent > 100) percent = 100;
+  if (percent < 0) percent = 0;
+
+  return percent;
+}
+
+/************ BRIDGE TO PUMP ************/
+void shoutToMasterPump(int lockoutValue) {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  
+  String url = "https://blynk.cloud/external/api/update?token=" + String(MASTER_PUMP_TOKEN) + "&v12=" + String(lockoutValue);
+  
+  Serial.print("[BRIDGE] Syncing Pump V12 -> ");
+  Serial.println(lockoutValue);
+  
+  http.begin(client, url);
+  int httpCode = http.GET();
+  if (httpCode > 0) {
+    Serial.println("[BRIDGE] Success: " + String(httpCode));
+  } else {
+    Serial.println("[BRIDGE] Failed: " + http.errorToString(httpCode));
+  }
+  http.end();
+}
+
+/************ SEND TO BLYNK ************/
 void sendMoistureToBlynk() {
-  int soilValue1 = analogRead(SOIL1);
-  int soilValue2 = analogRead(SOIL2);
-  int soilValue3 = analogRead(SOIL3);
+  int v1 = analogRead(SOIL1);
+  int v2 = analogRead(SOIL2);
+  int v3 = analogRead(SOIL3);
 
-  // Calculate average
-  int soilAverage = (soilValue1 + soilValue2 + soilValue3) / 3;
+  int p1 = convertToPercentage(v1);
+  int p2 = convertToPercentage(v2);
+  int p3 = convertToPercentage(v3);
 
-  // Condition: TRUE if DRY, FALSE if WET
-  soil1Dry = (soilValue1 > dryThreshold);
-  soil2Dry = (soilValue2 > dryThreshold);
-  soil3Dry = (soilValue3 > dryThreshold);
+  int avgPercent = (p1 + p2 + p3) / 3;
+  int avgRaw = (v1 + v2 + v3) / 3;
 
-  // Print results
-  Serial.print("Soil Avg: ");
-  Serial.print(soilAverage);
-  Serial.print(" | S1: "); Serial.print(soilValue1);
-  Serial.print(" | S2: "); Serial.print(soilValue2);
-  Serial.print(" | S3: "); Serial.print(soilValue3);
-  Serial.println();
+  soil1Dry = (v1 > dryThreshold);
+  soil2Dry = (v2 > dryThreshold);
+  soil3Dry = (v3 > dryThreshold);
 
-  // Send to Blynk (only if changed by more than 50 ADC units)
-  if (abs(soilAverage - lastSoilAvg) > 50) {
-    Blynk.virtualWrite(V7, soilAverage);
-    lastSoilAvg = soilAverage;
-    Serial.println("[BLYNK] Sent moisture.");
+  Serial.print("Soil Avg (%): ");
+  Serial.print(avgPercent);
+  Serial.print(" | S1: "); Serial.print(p1);
+  Serial.print("% | S2: "); Serial.print(p2);
+  Serial.print("% | S3: "); Serial.print(p3);
+  Serial.println("%");
+
+  if (abs(avgPercent - lastSoilAvg) > 2) {
+    Blynk.virtualWrite(V7, avgPercent);
+    lastSoilAvg = avgPercent;
+    Serial.println("[BLYNK] Sent moisture %.");
   } else {
     Serial.println("[DELTA] No change, skipping Blynk.");
   }
 
-  // Composite Rain Lockout: If soil is extremely wet, lock out system
-  if (soilAverage < wetThreshold) {
-      Blynk.virtualWrite(V12, 1);
-      Serial.println("Soil extremely wet! Triggering Rain Lockout (V12).");
+  // Rain lockout trigger (if soil extremely wet)
+  if (avgRaw < wetThreshold) {
+    Blynk.virtualWrite(V12, 1);
+    Serial.println("Soil extremely wet! Rain Lockout ON.");
+    shoutToMasterPump(1);
   }
 }
 
+/************ GOOGLE SHEETS ************/
 void logToGoogleSheets() {
   int v1 = analogRead(SOIL1);
   int v2 = analogRead(SOIL2);
   int v3 = analogRead(SOIL3);
-  int avg = (v1 + v2 + v3) / 3;
+
+  int avgRaw = (v1 + v2 + v3) / 3;
+  int avgPercent = convertToPercentage(avgRaw);
 
   if (WiFi.status() == WL_CONNECTED) {
     WiFiClientSecure client;
-    client.setInsecure(); // Google certificates rotate often; skip validation for simplicity
+    client.setInsecure();
     HTTPClient http;
 
-    String url = String(googleScriptUrl) + "?moisture=" + String(avg);
+    String url = String(googleScriptUrl) + "?moisture=" + String(avgPercent);
 
     Serial.print("Logging to Google Sheets: ");
     http.begin(client, url);
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
     int httpCode = http.GET();
-    
+
     if (httpCode > 0) {
       Serial.println("OK (" + String(httpCode) + ")");
     } else {
       Serial.println("FAILED (" + http.errorToString(httpCode) + ")");
     }
+
     http.end();
   }
 }
 
+/************ SETUP ************/
 void setup() {
   Serial.begin(115200);
 
@@ -104,21 +146,22 @@ void setup() {
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
-  // Hardware Watchdog: reboot if loop freezes for 30 seconds
   esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 30000,
-      .idle_core_mask = 0,
-      .trigger_panic = true,
+    .timeout_ms = 30000,
+    .idle_core_mask = 0,
+    .trigger_panic = true,
   };
+
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
   timer.setInterval(60000L, sendMoistureToBlynk);
-  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
+  timer.setInterval(300000L, logToGoogleSheets);
 }
 
+/************ LOOP ************/
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
+  esp_task_wdt_reset();
 }

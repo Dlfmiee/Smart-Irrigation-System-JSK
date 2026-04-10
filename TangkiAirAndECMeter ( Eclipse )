@@ -6,8 +6,8 @@
 #define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 /************ WIFI ************/
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 
 /************ PIN ************/
 #define FLOAT_PIN 13

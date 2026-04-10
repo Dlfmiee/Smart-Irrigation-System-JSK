@@ -12,8 +12,8 @@
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
 const char* POSIX_TZ = "MYT-8"; 
 
 #define RELAY_A_PIN 25    // Valve A (Inlet - Fertilizer)
@@ -26,6 +26,11 @@ int lastOpenDay = -1;
 // Motorized Valve Timing
 unsigned long valveATimer = 0;
 bool valveAHalfOpening = false;
+
+// 30 MINIT BAJA
+unsigned long fertilizingStartTime = 0;
+bool fertilizingActive = false;
+const unsigned long FERTILIZING_DURATION = 1800000; // 30 MINIT
 
 
 void forceCloseCD() {
@@ -62,12 +67,39 @@ void closeValveB() {
   Serial.println("Valve B (Outlet) Command Closed"); 
 }
 
+// 🚿 START 30 MINIT BAJA
+void startFertilizing() {
+  if (!rainLockout && !fertilizingActive) {
+    Serial.println("🌿 BAJA 30 MINIT DIMULAKAN!");
+    openValveA_Half();
+    openValveB();
+    fertilizingActive = true;
+    fertilizingStartTime = millis();
+  } else {
+    Serial.println("❌ Tidak boleh start: Rain lockout atau sudah aktif");
+  }
+}
+
+// ⏹️ STOP BAJA
+void stopFertilizing() {
+  closeValveA();
+  closeValveB();
+  fertilizingActive = false;
+  Serial.println("⏹️ BAJA DIBERHENTIKAN");
+}
+
 void processMotorTiming() {
   // Pause Valve A after 5 seconds to achieve "Half-Open"
   if (valveAHalfOpening && (millis() - valveATimer >= 5000)) {
     digitalWrite(RELAY_A_PIN, HIGH); // Cut power to stop motor half-way
     valveAHalfOpening = false;
     Serial.println("Valve A (Inlet) Paused at Half-Open to reduce pressure.");
+  }
+
+  // 30 MINIT AUTO-STOP
+  if (fertilizingActive && (millis() - fertilizingStartTime >= FERTILIZING_DURATION)) {
+    Serial.println("⏰ 30 MINIT SELESAI - AUTO STOP!");
+    stopFertilizing();
   }
 }
 
@@ -79,8 +111,7 @@ void checkSchedule() {
     if (lastOpenDay != timeinfo.tm_mday) {
       if (!rainLockout) {
         Serial.println("SCHEDULE: Fertilizer Sequence (08:00 AM)");
-        openValveA_Half(); // Inlet Half
-        openValveB();      // Outlet Full
+        startFertilizing();
       }
       lastOpenDay = timeinfo.tm_mday;
     }

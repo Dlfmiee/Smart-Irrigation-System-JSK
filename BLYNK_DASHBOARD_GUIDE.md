@@ -14,12 +14,13 @@ Go to **Developer Zone > Templates > ESP32 WIFI > Datastreams** and add the foll
 | **V4** | Valve D | Integer | 0/1 | Water Outlet Control (Cyberspark) |
 | **V5** | Valve A | Integer | 0/1 | Fertilizer Inlet Control (ALTF4) |
 | **V6** | Valve B | Integer | 0/1 | Fertilizer Outlet Control (ALTF4) |
-| **V7** | Soil Moisture | Integer | 0/4095 | Avg Moisture (Syahdiq) |
-| **V8** | Daily Rainfall | Double | 0/500 | Total Rain (mm) (Abdul) |
+| **V7** | Soil Moisture | Integer | 0/100 | Avg Moisture (%) (Syahdiq) |
+| **V8** | Daily Rainfall | Double | 0/500 | Daily Total Rain (mm) (Abdul) |
 | **V9** | Rain Value | Integer | 0/4095 | Analog Rain Sensor (Aieman) |
 | **V10** | Rain Status | String | - | "RAINING" or "NO RAIN" (Aieman) |
 | **V11** | Pump Status | Integer | 0/1 | 1 = ON, 0 = OFF (DT Buddy) |
 | **V12** | Rain Lockout | Integer | 0/1 | 1 = LOCK (Rainy Day), 0 = READY |
+| **V13** | Pump Mode | Integer | 0/2 | 0:AUTO, 1:ON, 2:OFF (DT Buddy) |
 
 ## 2. Premium Widget Setup
 For a professional, high-end dashboard, we recommend the following layout using the **Blynk Mobile App**:
@@ -34,6 +35,9 @@ For a professional, high-end dashboard, we recommend the following layout using 
   - *Display*: Shows "FULL" or "LOW".
 
 ### **B. Live Controls (Middle Row)**
+- **1x Segmented Switch (V13)**: Name: "MASTER PUMP". 
+  - *Values*: 0 (AUTO), 1 (ON), 2 (OFF).
+  - *Logic*: Manual override switch.
 - **4x Styled Buttons (V3, V4, V5, V6)**: 
   - Use "Push" mode for manual testing.
   - *Colors*: 
@@ -42,7 +46,8 @@ For a professional, high-end dashboard, we recommend the following layout using 
 
 ### **C. Environment Data (Bottom Row)**
 - **Gauge (V7)**: Name: "SOIL MOISTURE".
-  - *Range*: 0 to 4095.
+  - *Range*: 0 to 100.
+  - *Unit*: %.
   - *Gradient*: Green (Wet) to Red (Dry).
 - **Gauge (V2)**: Name: "EC LEVEL".
   - *Range*: 0 to 5.0.
