@@ -1,40 +1,50 @@
-# Smart Irrigation System JSK 🌿💧
+# 🌊 Smart Irrigation System (JSK Project)
 
-A high-performance, distributed IoT irrigation solution powered by **8 ESP32 microcontrollers** and the **Blynk Cloud**. This system is designed for maximum reliability by separating core tasks into independent hardware nodes that communicate seamlessly over WiFi.
+A decentralized, intelligent irrigation and fertilization system powered by 8 independent ESP32 nodes and the Blynk IoT Cloud.
 
-## 🚀 Key Features
-- **Distributed Architecture**: 8 independent nodes handle sensing, valves, and pumping to prevent a single point of failure.
-- **Smart Rain Lockout**: Automatically pauses irrigation if it's raining, if soil moisture is already high, or if there is excessive rainfall today.
-- **Dry-Run Protection**: The pump automatically cuts power if no water flow is detected within 15 seconds.
-- **Optimized Vpin Mapping**: Uses a clean sequence of **13 Virtual Pins (V0-V12)** for real-time monitoring and control.
-- **Automated Scheduling**: Independent timers for Water (1x daily) and Fertilizer (1x daily).
-- **Consolidated IoT Logging**: Automatically groups data from all 8 nodes into a single **Google Sheet** row every 5 minutes for long-term observation and 7-day testing.
-- **Hardware Watchdog**: Built-in self-reboot logic on all ESP32 nodes to recover from freezes or WiFi disconnects automatically.
-- **Delta Logging (Blynk Qutoa Protection)**: Only transmits sensor updates to Blynk if a significant change occurs, ensuring 100% operation within the 100k free-tier message limit.
+## 🚀 System Architecture
+The system is built on a **distributed "Safety First" architecture**. Unlike traditional master-slave systems, each node in this network is smart enough to act on its own while staying synchronized via the Blynk Cloud.
 
-## 📂 Project Structure
-The repository contains 8 separate Arduino codebases, each intended for a specific ESP32 node:
+### 🛰️ The 8 Operation Nodes:
+1.  **DT Buddy (Pam)**: The Master Pump Controller (Manual Override + 30m Safety Cap).
+2.  **Aieman (Rain Sensor)**: High-speed storm detection (5s timing).
+3.  **Syahdiq (Moisture Sensor)**: Multi-point soil humidity monitoring (0–100% scale).
+4.  **Abdul (Tipping Bucket)**: Accumulative daily rainfall measurement (mm).
+5.  **Flexxy (Waterflow E)**: Real-time flow monitoring and Dry-Run protection.
+6.  **Eclipse (Tank & EC)**: Nutrient level (mS/cm) and high-precision float monitoring.
+7.  **Cyberspark (Valve C/D)**: Water inlet/outlet management (4 PM Session).
+8.  **ALTF4 (Valve A/B)**: Fertilizer inlet/outlet management (8 AM Session).
 
-| Node Name | Device | Responsibility |
-| :--- | :--- | :--- |
-| **Flexxy** | Waterflow E | Core flow monitoring and dry-run safety. |
-| **Eclipse** | Tank & EC | Monitoring nutrient levels and water tank state. |
-| **Cyberspark**| Water Valve | Controls high-pressure water inlet/outlet motorized valves. |
-| **ALTF4** | Fert Valve | Controls fertilizer injection valves. |
-| **Syahdiq** | Soil Monitor | 3-point average soil moisture measurement. |
-| **Abdul** | Rain Gauge | Physical tipping bucket gauge for mm measurement. |
-| **Aieman** | Rain Sensor | Instant rain detection and cloud-lockout trigger. |
-| **DT Buddy** | **Master Pump**| Central pump controller with safety logic. |
+---
 
-## 📊 Data Observation & Efficiency
-The system is protected against service limits while providing reliable long-term reports:
-- **Google Sheets**: Unlimited history (5-minute intervals).
-- **Blynk IoT**: 60-second baseline update (safely fits 100k quota).
-- **Smart Delta**: Redundant updates are suppressed unless sensors detect a meaningful change.
+## 📅 Scheduled Operations
+The system runs two primary automated sessions per day:
 
-## 🛠️ Getting Started
-1. **[Arduino Requirements](file:///c:/Users/Fahmi/Desktop/Smart-Irrigation-System-JSK/ARDUINO_REQUIREMENTS.md)**: How to set up your IDE and libraries.
-2. **[Blynk Dashboard Guide](file:///c:/Users/Fahmi/Desktop/Smart-Irrigation-System-JSK/BLYNK_DASHBOARD_GUIDE.md)**: How to set up your mobile and web dashboard.
+*   **08:00 AM (Fertilizing)**: Node **ALTF4** opens valves A & B for **30 minutes**.
+*   **04:00 PM (Watering)**: Node **Cyberspark** opens valves C & D for **30 minutes**.
 
-## ⚖️ License
-This project was developed specifically for the **Smart-Irrigation-System-JSK** deployment. All rights reserved.
+---
+
+## 🛡️ Integrated Safety Logic
+*   **Global Rain Lockout (V12)**: Sensing nodes (Aieman, Syahdiq, Abdul) use the **Blynk REST API Bridge** to instantly signal a system-wide lockout if a hazard (rain/saturated soil) is detected.
+*   **Dry-Run Protection**: The Pump (`DTBuddy`) monitors the flow rate from `Flexxy`. If no water is detected 15 seconds after starting, the pump immediately shuts down to protect the hardware.
+*   **3-State Master Switch (V13)**: Gives the owner total control between **AUTO**, **FORCE ON**, and **FORCE OFF** modes.
+*   **Hardware Watchdog**: All nodes feature a 30-second self-reboot timer if the code hangs.
+
+---
+
+## ⚙️ Configuration
+*   **WIFI SSID**: `Fmz`
+*   **WIFI Pass**: `iiiiiiii`
+*   **Timezone**: GMT+8 (Malaysia)
+*   **Time Sync**: Automatically synchronized via NTP.
+
+---
+
+## 📂 Documentation
+- **[Dashboard Guide](file:///c:/Users/Fahmi/Desktop/Smart-Irrigation-System-JSK/BLYNK_DASHBOARD_GUIDE.md)**: How to set up the mobile app.
+- **[Process Flow](file:///c:/Users/Fahmi/Desktop/Smart-Irrigation-System-JSK/PROCESS_FLOW.md)**: Deep dive into the logic and timing.
+- **[Arduino Requirements](file:///c:/Users/Fahmi/Desktop/Smart-Irrigation-System-JSK/ARDUINO_REQUIREMENTS.md)**: Libraries and hardware pins.
+
+---
+*Created and maintained for the Smart-Irrigation-System-JSK Project.*
