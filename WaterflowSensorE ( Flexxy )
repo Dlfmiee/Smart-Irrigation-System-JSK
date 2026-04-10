@@ -10,8 +10,8 @@
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 #define FLOW_SENSOR_PIN 27
 #define LED_PIN 26
