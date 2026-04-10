@@ -45,8 +45,8 @@ When uploading, use these settings under the **Tools** menu:
 
 ## 5. Pre-Configured Credentials
 The code is already pre-loaded with these settings:
-*   **WiFi SSID**: `Fmz`
-*   **WiFi Password**: `iiiiiiii`
+*   **WiFi SSID**: `WiFi JSK`
+*   **WiFi Password**: `vhwau35565`
 *   **Timezone**: GMT+8 (Malaysia)
 
 ## 6. Troubleshooting
