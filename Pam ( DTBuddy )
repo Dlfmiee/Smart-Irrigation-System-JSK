@@ -129,7 +129,7 @@ void evaluatePumpState() {
 }
 
 void syncCloudData() {
-  Blynk.syncVirtual(V3, v4_open, V5, V6, V12); 
+  Blynk.syncVirtual(V3, V4, V5, V6, V12); 
   Blynk.syncVirtual(V0); 
 }
 
