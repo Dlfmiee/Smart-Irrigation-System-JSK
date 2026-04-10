@@ -16,6 +16,7 @@ char ssid[] = "Fmz";
 char pass[] = "iiiiiiii";
 
 const int REED_PIN = 27;
+const int WIFI_LED_PIN = 2; // Built-in Wi-Fi Status LED
 const float RAIN_PER_TIP = 0.2;
 const float LOCKOUT_THRESHOLD = 5.0; // Trigger lockout at 5mm
 
@@ -125,9 +126,19 @@ void logToGoogleSheets() {
   }
 }
 
+void checkWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, LOW);   // 🔆 LED ON - WiFi OK
+  } else {
+    digitalWrite(WIFI_LED_PIN, HIGH);  // ⚫ LED OFF - WiFi Lost
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(REED_PIN, INPUT_PULLUP);
+  pinMode(WIFI_LED_PIN, OUTPUT);
+  digitalWrite(WIFI_LED_PIN, HIGH);
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
@@ -145,6 +156,7 @@ void setup() {
 
   timer.setInterval(60000L, sendData); // Send to Blynk every 1 minute
   timer.setInterval(30000L, checkMidnightReset); // Check reset every 30s
+  timer.setInterval(10000L, checkWiFi);          // WiFi indicator
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 
   // Attach Interrupt to GPIO 27 - Triggers on FALLING edge (HIGH to LOW)

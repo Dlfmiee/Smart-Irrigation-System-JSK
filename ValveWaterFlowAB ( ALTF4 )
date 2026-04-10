@@ -18,6 +18,7 @@ const char* POSIX_TZ = "MYT-8";
 
 #define RELAY_A_PIN 25    // Valve A (Inlet - Fertilizer)
 #define RELAY_B_PIN 26    // Valve B (Outlet - Fertilizer)
+#define WIFI_LED_PIN 2    // Built-in Wi-Fi Status LED
 BlynkTimer timer;
 
 bool rainLockout = false;
@@ -151,12 +152,22 @@ void logToGoogleSheets() {
   }
 }
 
+void checkWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, LOW);   // 🔆 LED ON - WiFi OK
+  } else {
+    digitalWrite(WIFI_LED_PIN, HIGH);  // ⚫ LED OFF - WiFi Lost
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   pinMode(RELAY_A_PIN, OUTPUT);
   pinMode(RELAY_B_PIN, OUTPUT);
+  pinMode(WIFI_LED_PIN, OUTPUT);
   digitalWrite(RELAY_A_PIN, HIGH);
   digitalWrite(RELAY_B_PIN, HIGH);
+  digitalWrite(WIFI_LED_PIN, HIGH);
   
 
 
@@ -174,6 +185,7 @@ void setup() {
 
   timer.setInterval(100L, processMotorTiming); // Fast check for the 5s timer
   timer.setInterval(60000L, checkSchedule);
+  timer.setInterval(10000L, checkWiFi);
   timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
 }
 

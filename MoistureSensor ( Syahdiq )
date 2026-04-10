@@ -19,6 +19,7 @@ char pass[] = "iiiiiiii";
 #define SOIL1 34
 #define SOIL2 35
 #define SOIL3 32
+#define WIFI_LED_PIN 2 // Built-in Wi-Fi Status LED
 
 // Calibration values
 int dryThreshold = 2500;   // 0%
@@ -136,6 +137,14 @@ void logToGoogleSheets() {
   }
 }
 
+void checkWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, LOW);   // 🔆 LED ON - WiFi OK
+  } else {
+    digitalWrite(WIFI_LED_PIN, HIGH);  // ⚫ LED OFF - WiFi Lost
+  }
+}
+
 /************ SETUP ************/
 void setup() {
   Serial.begin(115200);
@@ -143,6 +152,8 @@ void setup() {
   pinMode(SOIL1, INPUT);
   pinMode(SOIL2, INPUT);
   pinMode(SOIL3, INPUT);
+  pinMode(WIFI_LED_PIN, OUTPUT);
+  digitalWrite(WIFI_LED_PIN, HIGH);
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 
@@ -156,6 +167,7 @@ void setup() {
   esp_task_wdt_add(NULL);
 
   timer.setInterval(60000L, sendMoistureToBlynk);
+  timer.setInterval(10000L, checkWiFi);
   timer.setInterval(300000L, logToGoogleSheets);
 }
 
