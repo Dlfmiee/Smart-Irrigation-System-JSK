@@ -1,20 +1,19 @@
 /************ BLYNK SETUP ************/
 #define BLYNK_PRINT Serial
-
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 /************ WIFI ************/
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 /************ PIN ************/
-#define FLOAT_PIN 13
-#define TDS_PIN   34
-#define LED_PIN   27
-#define WIFI_LED_PIN 2
-#define VREF      3.3
+#define FLOAT_PIN    4
+#define TDS_PIN      34
+#define LED_PIN      27
+#define WIFI_LED_PIN  2
+#define VREF         3.3
 
 #include <WiFi.h>
 #include <WiFiClient.h>
@@ -28,117 +27,162 @@ const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFV
 
 /************ VARIABLE ************/
 int analogValue = 0;
-float voltage = 0;
-float tdsValue = 0;
-float ecValue = 0;
+float voltage   = 0;
+float tdsValue  = 0;
+float ecValue   = 0;
 
 BlynkTimer timer;
-float lastEcValue = -1;
-int lastFloatStatus = -1;
-int lastReportDay = -1;  // Tracks daily reporting
+int lastReportDay = -1;
 
 /************ FUNCTION ************/
+
+// ✅ BAIKI #2 & #4 — fungsi baca sensor, boleh dipanggil dari mana-mana
 void readSensors() {
-  // ===== FLOAT SWITCH =====
-  int floatState = digitalRead(FLOAT_PIN);
+  int floatState  = digitalRead(FLOAT_PIN);
   int floatStatus = (floatState == LOW) ? 1 : 0;
 
-  // ===== TDS SENSOR =====
   analogValue = analogRead(TDS_PIN);
-  voltage = analogValue * VREF / 4095.0;
-  tdsValue = (voltage / VREF) * 1000.0;
-  ecValue = tdsValue / 500.0;
+  voltage     = analogValue * VREF / 4095.0;
+  tdsValue    = (voltage / VREF) * 1000.0;
+  ecValue     = tdsValue / 500.0;
 
-  // ===== LOCAL SERIAL MONITOR (Every min) =====
   Serial.print("[MONITOR] Float: ");
   Serial.print(floatStatus ? "FULL" : "LOW");
-  Serial.print(" | EC: ");
-  Serial.println(ecValue, 2);
+  Serial.print(" | TDS: ");
+  Serial.print(tdsValue, 0);
+  Serial.print(" ppm | EC: ");
+  Serial.print(ecValue, 2);
+  Serial.println(" mS/cm");
 }
 
 void sendDailyReport() {
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[REPORT] Skipped — no WiFi.");
+    return;
+  }
 
-  int floatState = digitalRead(FLOAT_PIN);
+  // ✅ BAIKI #4 — baca sensor terkini sebelum hantar
+  readSensors();
+
+  int floatState  = digitalRead(FLOAT_PIN);
   int floatStatus = (floatState == LOW) ? 1 : 0;
 
   Serial.println("📢 [REPORT] Sending Daily Data (07:00 AM)...");
 
-  // 1. Send to Blynk
+  // 1. Hantar ke Blynk
   Blynk.virtualWrite(V1, floatStatus);
   Blynk.virtualWrite(V2, ecValue);
 
-  // 2. Send to Google Sheets
+  // 2. Hantar ke Google Sheets
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
 
-  String url = String(googleScriptUrl) + "?ec=" + String(ecValue, 2) + "&tank=" + String(floatStatus);
-  
+  String url = String(googleScriptUrl)
+             + "?ec="   + String(ecValue, 2)
+             + "&tank=" + String(floatStatus);
+
   http.begin(client, url);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   int httpCode = http.GET();
-  
-  if (httpCode > 0) Serial.println("[REPORT] Sheets Success");
-  else Serial.println("[REPORT] Sheets Failed");
+
+  if (httpCode > 0) Serial.println("[REPORT] Sheets OK (" + String(httpCode) + ")");
+  else              Serial.println("[REPORT] Sheets FAILED (" + http.errorToString(httpCode) + ")");
+
   http.end();
 }
 
 void checkDailySchedule() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("[NTP] Gagal dapatkan masa.");
+    return;
+  }
 
-  // Run at 07:00 AM once per day
+  // ✅ KEKAL — tanpa semak minit, trigger pada jam 7 pagi sekali sehari
   if (timeinfo.tm_hour == 7 && lastReportDay != timeinfo.tm_mday) {
     sendDailyReport();
     lastReportDay = timeinfo.tm_mday;
   }
 }
 
+// ✅ BAIKI #3 — tunjuk IP & RSSI
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
-    Serial.println("✅ WiFi OK");
+    digitalWrite(WIFI_LED_PIN, HIGH);
+    Serial.print("✅ WiFi OK | IP: ");
+    Serial.print(WiFi.localIP());
+    Serial.print(" | RSSI: ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
   } else {
-    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
-    Serial.println("📶 WiFi reconnect...");
+    digitalWrite(WIFI_LED_PIN, LOW);
+    Serial.println("📶 WiFi lost — reconnecting...");
     WiFi.begin(ssid, pass);
   }
 }
 
+/************ SETUP ************/
 void setup() {
   Serial.begin(115200);
 
-  pinMode(FLOAT_PIN, INPUT_PULLUP);
-  pinMode(TDS_PIN, INPUT);
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(FLOAT_PIN,    INPUT_PULLUP);
+  pinMode(TDS_PIN,      INPUT);
+  pinMode(LED_PIN,      OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
 
-  digitalWrite(LED_PIN, HIGH);
+  digitalWrite(LED_PIN,      HIGH);
   digitalWrite(WIFI_LED_PIN, LOW);
 
+  // ✅ BAIKI #6 — WiFi dengan feedback
+  Serial.print("[WIFI] Connecting to: ");
+  Serial.println(ssid);
   WiFi.begin(ssid, pass);
-  Blynk.config(BLYNK_AUTH_TOKEN);
-  configTime(28800, 0, "pool.ntp.org");
 
-  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    digitalWrite(WIFI_LED_PIN, !digitalRead(WIFI_LED_PIN));
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, HIGH);
+    Serial.println("\n✅ WiFi Connected!");
+    Serial.print("   IP   : "); Serial.println(WiFi.localIP());
+    Serial.print("   RSSI : "); Serial.print(WiFi.RSSI()); Serial.println(" dBm");
+  } else {
+    digitalWrite(WIFI_LED_PIN, LOW);
+    Serial.println("\n❌ WiFi FAILED — Blynk will retry in background.");
+  }
+
+  Blynk.config(BLYNK_AUTH_TOKEN);
+  configTime(28800, 0, "pool.ntp.org");   // UTC+8 Malaysia
+
+  // ===== WATCHDOG =====
   esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 30000,
+      .timeout_ms     = 30000,
       .idle_core_mask = 0,
-      .trigger_panic = true,
+      .trigger_panic  = true,
   };
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(60000L, readSensors);         // Local view every min
-  timer.setInterval(30000L, checkWiFi);           // Wifi check 30s
-  timer.setInterval(30000L, checkDailySchedule); // Schedule check 30s
+  // ✅ BAIKI #2 — baca sensor terus masa start, jangan tunggu 60s
+  readSensors();
 
-  Serial.println("SYSTEM START - ESP32 + BLYNK");
+  // ===== TIMER =====
+  timer.setInterval(60000L, readSensors);          // Monitor setiap 60s
+  timer.setInterval(30000L, checkWiFi);            // Semak WiFi setiap 30s
+  timer.setInterval(30000L, checkDailySchedule);   // Semak jadual setiap 30s
+
+  Serial.println("[SYSTEM] Ready — ESP32 + Blynk + TDS + Float + Schedule 07:00");
 }
 
+/************ LOOP ************/
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
+  esp_task_wdt_reset();
 }

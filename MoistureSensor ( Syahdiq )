@@ -13,8 +13,8 @@ DYLAN C02:
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 /************ WIFI ************/
-char ssid[] = "C02 LAB 2";
-char pass[] = "1234abcd5";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 // Soil sensor pins
 #define SOIL1 34

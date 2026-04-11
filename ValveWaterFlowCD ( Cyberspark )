@@ -20,8 +20,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "SurauAl-Irfan";
-const char* pass = "datangsurau";
+const char* ssid = "WiFi JSK";
+const char* pass = "vhwau35565";
 
 // Bridge to Master Pump
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";

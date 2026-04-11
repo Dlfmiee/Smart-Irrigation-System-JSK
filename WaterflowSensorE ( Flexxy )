@@ -11,8 +11,8 @@
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 #define FLOW_SENSOR_PIN 27
 #define LED_PIN 26
@@ -25,23 +25,7 @@ volatile unsigned long lastPulseTime = 0;
 BlynkTimer timer;
 int lastReportDay = -1;
 int lastReportSlot = -1;
-
-// Helper to check if we are in the irrigation reporting window
-bool isIrrigationActive() {
-  time_t now = time(nullptr);
-  struct tm* timeinfo = localtime(&now);
-  if (!timeinfo) return false;
-  
-  int hour = timeinfo->tm_hour;
-  int minute = timeinfo->tm_min;
-
-  // Window 1: Morning (07:59:00 - 08:35:00)
-  bool morningWindow = (hour == 7 && minute >= 59) || (hour == 8 && minute <= 35);
-  // Window 2: Afternoon (15:59:00 - 16:35:00)
-  bool afternoonWindow = (hour == 15 && minute >= 59) || (hour == 16 && minute <= 35);
-
-  return morningWindow || afternoonWindow;
-}
+int lastSentMinute = -1; // Minute-latch for One-Shot reporting
 
 void IRAM_ATTR pulseCounter() {
   pulseCount++;
@@ -55,10 +39,13 @@ void sendFlowRate() {
   interrupts();
 
   // Calculation for 2-second interval:
-  // pulses / 7.5 = Liters per minute if measured for 1 minute
-  // Since we measure for 2 seconds (1/30th of a minute), we adjust:
   float flow_L_per_min = (count / 7.5) * 30.0; 
   flowRate = flow_L_per_min / 60.0;  // Convert to L/sec
+
+  time_t now = time(nullptr);
+  struct tm* timeinfo = localtime(&now);
+  int hour = timeinfo->tm_hour;
+  int minute = timeinfo->tm_min;
 
   Serial.print("[FLOW] Pulses: ");
   Serial.print(count);
@@ -66,18 +53,28 @@ void sendFlowRate() {
   Serial.print(flowRate, 3);
   Serial.println(" L/sec");
 
-  // Logic: Only send to Blynk during Active Irrigation Windows
-  if (isIrrigationActive()) {
-    if (abs(flowRate - lastFlowRate) > 0.01) {
+  // Exact Target Slots: First (Leak Check T-2), Mid Check, Final Reset
+  bool isTargetSlot = ((hour == 7 && minute == 58) ||
+                       (hour == 8 && minute == 15) ||
+                       (hour == 15 && minute == 58) ||
+                       (hour == 16 && minute == 15));
+                       
+  bool isResetSlot = ((hour == 8 && minute == 31) ||
+                      (hour == 16 && minute == 31));
+
+  if (isTargetSlot) {
+    if (minute != lastSentMinute) {
       Blynk.virtualWrite(V0, flowRate);
+      lastSentMinute = minute;
       lastFlowRate = flowRate;
-      Serial.println("[BLYNK] Flow updated.");
+      Serial.println("[BLYNK] 3-Point Snapshot Sent.");
     }
-  } else if (lastFlowRate > 0) {
-    // Just exited window? Reset Blynk to 0 once.
+  } else if (isResetSlot && lastFlowRate > 0) {
+    // Final Reset to 0 (Last)
     Blynk.virtualWrite(V0, 0);
     lastFlowRate = 0;
-    Serial.println("[BLYNK] Window closed. Flow reset to 0.");
+    lastSentMinute = 31;
+    Serial.println("[BLYNK] Final 0-Reset Sent.");
   }
 }
 

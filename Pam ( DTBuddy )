@@ -20,8 +20,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "SurauAl-Irfan";
-const char* pass = "datangsurau";
+const char* ssid = "WiFi JSK";
+const char* pass = "vhwau35565";
 
 // Google Sheets Log
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
@@ -40,6 +40,7 @@ const int wifiLedPin = 21; // Assuming GPIO 21 for LED from user snippets previo
 bool pumpRunning = false;
 bool pumpError = false;
 unsigned long pumpStartTime = 0;
+bool lastPumpRunning = false; // Prevents Blynk message spam
 
 bool v3_open = false; // Valve C (Cyberspark) - Monitored but not triggering pump
 bool v4_open = false; // Valve D (Cyberspark) - TRIGGER
@@ -84,8 +85,11 @@ void masterResetAll() {
 }
 
 void evaluatePumpState() {
-  // Update indicator
-  Blynk.virtualWrite(V11, pumpRunning ? 1 : 0);
+  // Update indicator only on change to save Blynk messages
+  if (pumpRunning != lastPumpRunning) {
+    Blynk.virtualWrite(V11, pumpRunning ? 1 : 0);
+    lastPumpRunning = pumpRunning;
+  }
 
   // Check ONLY B and D are open (as requested)
   bool demand = (v4_open || v6_open);
