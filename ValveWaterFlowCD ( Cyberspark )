@@ -1,99 +1,86 @@
-#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+/*
+ Valve CD Controller (Cyberspark) - UPDATED
+ Logic: 3-Wire Motorized Valve (Valve D ONLY)
+ Pins: 26 (Open), 27 (Close)
+ Schedule: 04:00 PM - 04:30 PM
+ Token: Shared (MbA2y5hl...)
+*/
+
+#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_PRINT Serial
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 #include <time.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
 
-// 🔆 LED & RELAY PINS
-#define WIFI_LED_PIN 2         // Built-in LED (WiFi status)
-#define RELAY_C_PIN 26    // Valve C (Inlet)
-#define RELAY_D_PIN 27    // Valve D (Outlet)
+// WiFi Configuration
+const char* ssid = "Fmz";
+const char* pass = "iiiiiiii";
+const char* POSIX_TZ = "MYT-8"; 
+
+// --- PIN DEFINITIONS ---
+const int RELAY_OPEN_PIN = 26;   // Relay for Open
+const int RELAY_CLOSE_PIN = 27;  // Relay for Close
+const int WIFI_LED_PIN = 2;      // Status LED
+
+// --- VIRTUAL PINS ---
+#define VPIN_VALVE_D V4           // Main Valve Switch for D
+#define VPIN_SYSTEM_STATUS V7     // Status Text
+
+// --- VARIABLES ---
 BlynkTimer timer;
+bool valveD_Open = false;
+int lastOpenHour = -1;
+int lastCloseHour = -1;
 
-bool rainLockout = false;
-int lastTriggerHour = -1;
+// ================== VALVE ACTIONS ==================
 
-// Valve timing
-
-// 30 MINIT SIRAM
-unsigned long wateringStartTime = 0;
-bool wateringActive = false;
-const unsigned long WATERING_DURATION = 1800000; // 30 MINIT
-
-const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
-char ssid[] = "Fmz";
-char pass[] = "iiiiiiii";
-
-
-
-// VALVE C - FULL OPEN
-void openValveC() { 
-  digitalWrite(RELAY_C_PIN, LOW); 
-  Blynk.virtualWrite(V3, 1); 
-  Serial.println("🔓 Valve C: Full Open");
+void stopValve() {
+  digitalWrite(RELAY_OPEN_PIN, HIGH); // Relays OFF (Active Low)
+  digitalWrite(RELAY_CLOSE_PIN, HIGH);
+  Serial.println("Motor: STOP");
 }
 
-void closeValveC() { 
-  digitalWrite(RELAY_C_PIN, HIGH); 
-  Blynk.virtualWrite(V3, 0); 
-  Serial.println("🔒 Valve C: Closed");
+void openValveD() {
+  digitalWrite(RELAY_CLOSE_PIN, HIGH); // Ensure Close is OFF
+  delay(100);
+  digitalWrite(RELAY_OPEN_PIN, LOW); // Trigger OPEN
+  valveD_Open = true;
+  Blynk.virtualWrite(VPIN_VALVE_D, 1);
+  Serial.println("Action: OPEN Valve D (3-Wire)");
 }
 
-// VALVE D - FULL OPEN
-void openValveD() { 
-  digitalWrite(RELAY_D_PIN, LOW); 
-  Blynk.virtualWrite(V4, 1); 
-  Serial.println("🔓 Valve D: Full Open");
+void closeValveD() {
+  digitalWrite(RELAY_OPEN_PIN, HIGH); // Ensure Open is OFF
+  delay(100);
+  digitalWrite(RELAY_CLOSE_PIN, LOW); // Trigger CLOSE
+  valveD_Open = false;
+  Blynk.virtualWrite(VPIN_VALVE_D, 0);
+  Serial.println("Action: CLOSE Valve D (3-Wire)");
 }
 
-void closeValveD() { 
-  digitalWrite(RELAY_D_PIN, HIGH); 
-  Blynk.virtualWrite(V4, 0); 
-  Serial.println("🔒 Valve D: Closed");
+// ================== HANDLERS ==================
+
+BLYNK_WRITE(VPIN_VALVE_D) {
+  if (param.asInt()) openValveD();
+  else closeValveD();
 }
 
-// 🚿 START 30 MINIT SIRAM
-void startWatering() {
-  if (!rainLockout && !wateringActive) {
-    Serial.println("🚿 SIRAM 30 MINIT DIMULAKAN!");
-    openValveC();
-    openValveD();
-    wateringActive = true;
-    wateringStartTime = millis();
-  } else {
-    Serial.println("❌ Tidak boleh start: Rain lockout atau sudah aktif");
-  }
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(VPIN_VALVE_D);
+  Serial.println("✅ Cyberspark Connected to Blynk");
 }
 
-// ⏹️ STOP SIRAM
-void stopWatering() {
-  closeValveC();
-  closeValveD();
-  wateringActive = false;
-  Serial.println("⏹️ SIRAM DIBERHENTIKAN");
-}
-
-void processMotorTiming() {
-  
-  // 30 MINIT AUTO-STOP
-  if (wateringActive && (millis() - wateringStartTime >= WATERING_DURATION)) {
-    Serial.println("⏰ 30 MINIT SELESAI - AUTO STOP!");
-    stopWatering();
-  }
-}
+// ================== LOGIC ==================
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
-    Serial.println("✅ WiFi OK");
+    digitalWrite(WIFI_LED_PIN, HIGH);
   } else {
-    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
-    Serial.println("📶 WiFi reconnect...");
+    digitalWrite(WIFI_LED_PIN, LOW);
     WiFi.begin(ssid, pass);
   }
 }
@@ -103,101 +90,50 @@ void checkSchedule() {
   if (!getLocalTime(&timeinfo)) return;
 
   int hour = timeinfo.tm_hour;
-  // 4PM (16:00) Malaysia time
-  if (hour == 16 && timeinfo.tm_min == 0 && lastTriggerHour != hour) {
-    if (!rainLockout) {
-      startWatering();
-    } else {
-      Serial.println("🌧️ Rain lockout aktif - skip 4PM");
-    }
-    lastTriggerHour = hour;
+  int minute = timeinfo.tm_min;
+  int day = timeinfo.tm_mday;
+
+  // 04:00 PM (16:00) - START
+  if (hour == 16 && minute == 0 && lastOpenHour != hour) {
+    openValveD();
+    lastOpenHour = hour;
   }
-}
 
-void logToGoogleSheets() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo)) {
-    int valveC_on = !digitalRead(RELAY_C_PIN);
-    int valveD_on = !digitalRead(RELAY_D_PIN);
-    
-    String url = String(googleScriptUrl) +
-                "&valveC=" + String(valveC_on) +
-                "&valveD=" + String(valveD_on) +
-                "&rainLockout=" + String(rainLockout) +
-                "&watering=" + String(wateringActive);
-
-    http.begin(client, url);
-    int httpCode = http.GET();
-    Serial.println("📊 Sheets OK [" + String(httpCode) + "]");
-    http.end();
+  // 04:30 PM (16:30) - STOP
+  if (hour == 16 && minute == 30 && lastCloseHour != hour) {
+    closeValveD();
+    lastCloseHour = hour;
   }
-}
-
-// BLYNK CONTROLS
-BLYNK_WRITE(V12) { 
-  rainLockout = param.asInt() == 1; 
-  Serial.println("🌧️ Rain lockout: " + String(rainLockout ? "ON" : "OFF"));
-}
-
-BLYNK_WRITE(V3) { 
-  if (param.asInt()) openValveC(); 
-  else closeValveC(); 
-}
-
-BLYNK_WRITE(V4) { 
-  if (param.asInt()) openValveD(); 
-  else closeValveD(); 
-}
-
-BLYNK_WRITE(V10) { 
-  if (param.asInt()) startWatering(); 
-}
-
-BLYNK_WRITE(V11) { 
-  if (param.asInt()) stopWatering(); 
-}
-
-BLYNK_CONNECTED() { 
-  Blynk.syncVirtual(V12); 
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("🌱 Smart Irrigation - 30 Minit Siram + LED WiFi");
   
-  // Initialize pins
+  pinMode(RELAY_OPEN_PIN, OUTPUT);
+  pinMode(RELAY_CLOSE_PIN, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
-  pinMode(RELAY_C_PIN, OUTPUT);
-  pinMode(RELAY_D_PIN, OUTPUT);
-  digitalWrite(WIFI_LED_PIN, LOW);     // LED OFF
-  digitalWrite(RELAY_C_PIN, HIGH); 
-  digitalWrite(RELAY_D_PIN, HIGH); 
+  
+  // Default: OFF
+  digitalWrite(RELAY_OPEN_PIN, HIGH);
+  digitalWrite(RELAY_CLOSE_PIN, HIGH);
+  digitalWrite(WIFI_LED_PIN, LOW);
 
-  // WiFi & Blynk
+  // Connection
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
-  
-  // Time Malaysia
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
-  
-  // Watchdog 30s
+
+  // Watchdog
   esp_task_wdt_config_t twdt_config = {
     .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
   };
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  // Timers
-  timer.setInterval(100L, processMotorTiming);      // Fast loop
-  timer.setInterval(60000L, checkSchedule);         // 1 min
-  timer.setInterval(300000L, logToGoogleSheets);    // 5 min
-  timer.setInterval(30000L, checkWiFi);             // 30s WiFi+LED
+  timer.setInterval(10000L, checkWiFi);
+  timer.setInterval(60000L, checkSchedule);
+  
+  Serial.println("🚀 Cyberspark READY (3-Wire Valve D)");
 }
 
 void loop() {

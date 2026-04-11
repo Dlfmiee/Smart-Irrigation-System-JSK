@@ -1,181 +1,166 @@
-#define BLYNK_PRINT Serial
+/*
+ Valve AB Controller (ALTF4) - UPDATED
+ Logic: 3-Wire Motorized Valve (Valve A ONLY)
+ Pins: 25 (Open), 26 (Close)
+ Schedule: 08:00 AM - 08:30 AM
+ Token: Shared (MbA2y5hl...)
+*/
+
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_PRINT Serial
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
 #include <time.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
 
-const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
-
-char ssid[] = "Fmz";
-char pass[] = "iiiiiiii";
+// WiFi Configuration
+const char* ssid = "Fmz";
+const char* pass = "iiiiiiii";
 const char* POSIX_TZ = "MYT-8"; 
 
-#define RELAY_A_PIN 25    // Valve A (Inlet - Fertilizer)
-#define RELAY_B_PIN 26    // Valve B (Outlet - Fertilizer)
-#define WIFI_LED_PIN 2    // Built-in Wi-Fi Status LED
+// --- PIN DEFINITIONS ---
+const int RELAY_OPEN_PIN = 25;   // Relay for Open (Inlet)
+const int RELAY_CLOSE_PIN = 26;  // Relay for Close (Inlet)
+const int FLOW_SENSOR_PIN = 4;   // Flow Sensor Input
+const int WIFI_LED_PIN = 2;      // Status LED
+
+// --- VIRTUAL PINS ---
+#define VPIN_VALVE_A V5           // Main Valve Switch (Active on dashboard)
+#define VPIN_FLOW_RATE V1         // Display pulses
+#define VPIN_FLOW_STATUS V2       // Flow LED
+#define VPIN_SYSTEM_STATUS V7     // Status Text
+
+// --- VARIABLES ---
 BlynkTimer timer;
-
-bool rainLockout = false;
+volatile unsigned long pulseCount = 0;
+unsigned long lastPulseCount = 0;
+bool flowDetected = false;
+bool valveA_Open = false;
 int lastOpenDay = -1;
+int lastCloseDay = -1;
 
-// Motorized Valve Timing
-
-// 30 MINIT BAJA
-unsigned long fertilizingStartTime = 0;
-bool fertilizingActive = false;
-const unsigned long FERTILIZING_DURATION = 1800000; // 30 MINIT
-
-
-
-
-// VALVE A - INLET (Full-Open Logic)
-void openValveA() { 
-  digitalWrite(RELAY_A_PIN, LOW); 
-  Blynk.virtualWrite(V5, 1); 
-  Serial.println("Valve A (Inlet) Opened Fully"); 
-}
-void closeValveA() { 
-  digitalWrite(RELAY_A_PIN, HIGH); 
-  Blynk.virtualWrite(V5, 0); 
-  Serial.println("Valve A (Inlet) Command Closed"); 
+void IRAM_ATTR pulseCounter() {
+  pulseCount++;
 }
 
-// VALVE B - OUTLET (Full-Open Logic)
-void openValveB() { 
-  digitalWrite(RELAY_B_PIN, LOW); 
-  Blynk.virtualWrite(V6, 1); 
-  Serial.println("Valve B (Outlet) Opened Fully"); 
-}
-void closeValveB() { 
-  digitalWrite(RELAY_B_PIN, HIGH); 
-  Blynk.virtualWrite(V6, 0); 
-  Serial.println("Valve B (Outlet) Command Closed"); 
+// ================== VALVE ACTIONS ==================
+
+void stopValve() {
+  digitalWrite(RELAY_OPEN_PIN, HIGH); // Relays OFF (Active Low)
+  digitalWrite(RELAY_CLOSE_PIN, HIGH);
+  Serial.println("Motor: STOP");
 }
 
-// 🚿 START 30 MINIT BAJA
-void startFertilizing() {
-  if (!rainLockout && !fertilizingActive) {
-    Serial.println("🌿 BAJA 30 MINIT DIMULAKAN!");
-    openValveA();
-    openValveB();
-    fertilizingActive = true;
-    fertilizingStartTime = millis();
+void openValveA() {
+  digitalWrite(RELAY_CLOSE_PIN, HIGH); // Ensure Close is OFF
+  delay(100);
+  digitalWrite(RELAY_OPEN_PIN, LOW); // Trigger OPEN
+  valveA_Open = true;
+  Blynk.virtualWrite(VPIN_VALVE_A, 1);
+  Serial.println("Action: OPEN Valve A (3-Wire)");
+}
+
+void closeValveA() {
+  digitalWrite(RELAY_OPEN_PIN, HIGH); // Ensure Open is OFF
+  delay(100);
+  digitalWrite(RELAY_CLOSE_PIN, LOW); // Trigger CLOSE
+  valveA_Open = false;
+  Blynk.virtualWrite(VPIN_VALVE_A, 0);
+  Serial.println("Action: CLOSE Valve A (3-Wire)");
+}
+
+// ================== HANDLERS ==================
+
+BLYNK_WRITE(VPIN_VALVE_A) {
+  if (param.asInt()) openValveA();
+  else closeValveA();
+}
+
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(VPIN_VALVE_A);
+  Serial.println("✅ ALTF4 Connected to Blynk");
+}
+
+// ================== LOGIC ==================
+
+void checkWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, HIGH);
   } else {
-    Serial.println("❌ Tidak boleh start: Rain lockout atau sudah aktif");
+    digitalWrite(WIFI_LED_PIN, LOW);
+    WiFi.begin(ssid, pass);
   }
 }
 
-// ⏹️ STOP BAJA
-void stopFertilizing() {
-  closeValveA();
-  closeValveB();
-  fertilizingActive = false;
-  Serial.println("⏹️ BAJA DIBERHENTIKAN");
-}
-
-void processMotorTiming() {
-  // 30 MINIT AUTO-STOP
-  if (fertilizingActive && (millis() - fertilizingStartTime >= FERTILIZING_DURATION)) {
-    Serial.println("⏰ 30 MINIT SELESAI - AUTO STOP!");
-    stopFertilizing();
-  }
+void checkFlow() {
+  unsigned long pulses = pulseCount;
+  unsigned long pulsesInWindow = pulses - lastPulseCount;
+  lastPulseCount = pulses;
+  flowDetected = (pulsesInWindow > 0);
+  Blynk.virtualWrite(VPIN_FLOW_RATE, pulsesInWindow);
+  Blynk.virtualWrite(VPIN_FLOW_STATUS, flowDetected ? 1 : 0);
 }
 
 void checkSchedule() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) return;
 
-  if (timeinfo.tm_hour == 8 && timeinfo.tm_min == 0) {
-    if (lastOpenDay != timeinfo.tm_mday) {
-      if (!rainLockout) {
-        Serial.println("SCHEDULE: Fertilizer Sequence (08:00 AM)");
-        startFertilizing();
-      }
-      lastOpenDay = timeinfo.tm_mday;
-    }
+  int hour = timeinfo.tm_hour;
+  int minute = timeinfo.tm_min;
+  int day = timeinfo.tm_mday;
+
+  // 08:00 AM - START
+  if (hour == 8 && minute == 0 && lastOpenDay != day) {
+    openValveA();
+    lastOpenDay = day;
   }
-}
 
-BLYNK_WRITE(V12) { rainLockout = param.asInt() == 1; }
-BLYNK_WRITE(V5) { if (param.asInt()) openValveA(); else closeValveA(); }
-BLYNK_WRITE(V6) { if (param.asInt()) openValveB(); else closeValveB(); }
-BLYNK_CONNECTED() { Blynk.syncVirtual(V12); }
-
-void logToGoogleSheets() {
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-
-    // Read relay state. 
-    int valveA_on = !digitalRead(RELAY_A_PIN);
-    int valveB_on = !digitalRead(RELAY_B_PIN);
-
-    String statusStr = "VALVE_A:" + String(valveA_on) + "_B:" + String(valveB_on);
-
-    String url = String(googleScriptUrl) + "?valveA=" + String(valveA_on) + "&valveB=" + String(valveB_on);
-
-    Serial.print("Logging to Google Sheets: ");
-    http.begin(client, url);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    int httpCode = http.GET();
-    
-    if (httpCode > 0) {
-      Serial.println("OK (" + String(httpCode) + ")");
-    } else {
-      Serial.println("FAILED (" + http.errorToString(httpCode) + ")");
-    }
-    http.end();
-  }
-}
-
-void checkWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
-    Serial.println("✅ WiFi OK");
-  } else {
-    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
-    Serial.println("📶 WiFi reconnect...");
-    WiFi.begin(ssid, pass);
+  // 08:30 AM - STOP
+  if (hour == 8 && minute == 30 && lastCloseDay != day) {
+    closeValveA();
+    lastCloseDay = day;
   }
 }
 
 void setup() {
   Serial.begin(115200);
-  pinMode(RELAY_A_PIN, OUTPUT);
-  pinMode(RELAY_B_PIN, OUTPUT);
-  pinMode(WIFI_LED_PIN, OUTPUT);
-  digitalWrite(RELAY_A_PIN, HIGH);
-  digitalWrite(RELAY_B_PIN, HIGH);
-  digitalWrite(WIFI_LED_PIN, LOW);
   
+  pinMode(RELAY_OPEN_PIN, OUTPUT);
+  pinMode(RELAY_CLOSE_PIN, OUTPUT);
+  pinMode(WIFI_LED_PIN, OUTPUT);
+  pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
+  
+  // Default: OFF
+  digitalWrite(RELAY_OPEN_PIN, HIGH);
+  digitalWrite(RELAY_CLOSE_PIN, HIGH);
+  digitalWrite(WIFI_LED_PIN, LOW);
+
+  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, FALLING);
+
+  // Connection
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
-  
-  // Hardware Watchdog: reboot if loop freezes for 30 seconds
+
+  // Watchdog
   esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 30000,
-      .idle_core_mask = 0,
-      .trigger_panic = true,
+    .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
   };
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(100L, processMotorTiming); // Motor & 30 min check
-  timer.setInterval(60000L, checkSchedule);
+  timer.setInterval(2000L, checkFlow);
   timer.setInterval(10000L, checkWiFi);
-  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
+  timer.setInterval(60000L, checkSchedule);
+  
+  Serial.println("🚀 ALTF4 READY (3-Wire Valve A)");
 }
 
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset(); // Feed watchdog to prevent reboot
+  esp_task_wdt_reset();
 }

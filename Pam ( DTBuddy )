@@ -1,3 +1,10 @@
+/*
+  Pump Controller (Pam / DTBuddy) - FINAL STABLE
+  Logic: HIGH = RUN, LOW = STOP
+  Monitors: Valve A (V5) and Valve D (V4)
+  WiFi: Fmz / iiiiiiii
+*/
+
 #define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_PRINT Serial
@@ -8,170 +15,143 @@
 #include <WiFiClientSecure.h>
 #include <esp_task_wdt.h>
 
-const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
+// WiFi Configuration
+const char* ssid = "Fmz";
+const char* pass = "iiiiiiii";
+char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
 
-/* --- Blynk Credentials --- */
-char auth[] = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; 
-char ssid[] = "Fmz";
-char pass[] = "iiiiiiii";
+// --- PIN DEFINITIONS ---
+const int relayPin = 26;   // Pump Relay
+const int ledPin   = 27;   // Status LED
+const int wifiLedPin = 2;  // Built-in WiFi LED
 
-/* --- Pins --- */
-const int relayPin = 26;   // ACTIVE-LOW
-const int ledPin   = 27;   // Custom Hardware LED
-const int wifiLedPin = 2;  // Built-in Wi-Fi Status LED
-
-/* --- State Variables --- */
-bool pumpState = false;
-bool pumpError = false;      
+// --- VARIABLES ---
+bool pumpRunning = false;
+bool pumpError = false;
 unsigned long pumpStartTime = 0;
-
-// Valve & Cloud States
-bool v3_open = false, v4_open = false; // Valve C & D
-bool v5_open = false, v6_open = false; // Valve A & B
-bool rainLockout = false;              // Global Rain (V12)
+bool v4_open = false; // Valve D
+bool v5_open = false; // Valve A
+bool rainLockout = false;
 float flowE = 0;
-
-/* 
-  Pump Mode (V13):
-  0 = AUTO (Default)
-  1 = MANUAL ON (Force)
-  2 = MANUAL OFF (Force Stop)
-*/
-int pumpMode = 0; 
+int pumpMode = 0; // 0=AUTO, 1=FORCE RUN, 2=FORCE STOP
 
 BlynkTimer timer;
 
-// ================== HELPER FUNCTIONS ==================
+// ================== HELPER ==================
 
 void updateLED() {
-  // Sync LED with active relay state
-  digitalWrite(ledPin, !digitalRead(relayPin)); 
+  digitalWrite(ledPin, pumpRunning ? HIGH : LOW);
 }
 
-void startupBlink(int count, int speed) {
-  for(int i=0; i<count; i++) {
-    digitalWrite(ledPin, LOW); delay(speed);
-    digitalWrite(ledPin, HIGH); delay(speed);
-  }
-}
+// ================== RELAY CONTROL ==================
 
-// ================== CORE FUNCTIONS ==================
-
-void turnPumpON() {
-  if (pumpState) return;
-  digitalWrite(relayPin, LOW); 
-  pumpState = true;
-  pumpStartTime = millis();
+void allowPump() {
+  digitalWrite(relayPin, HIGH); // User preferred HIGH to run
+  pumpRunning = true;
+  if (pumpStartTime == 0) pumpStartTime = millis();
   Blynk.virtualWrite(V11, 1);
   updateLED();
-  Serial.println("[SYSTEM] PUMP ON");
+  Serial.println("[SYSTEM] Pump RUNNING");
 }
 
-void turnPumpOFF() {
-  if (!pumpState) return;
-  digitalWrite(relayPin, HIGH); 
-  pumpState = false;
+void stopPump() {
+  digitalWrite(relayPin, LOW); // User preferred LOW to stop
+  pumpRunning = false;
+  pumpStartTime = 0;
   Blynk.virtualWrite(V11, 0);
   updateLED();
-  Serial.println("[SYSTEM] PUMP OFF");
+  Serial.println("[SYSTEM] Pump STOPPED");
 }
 
+// ================== CORE LOGIC ==================
+
 void masterResetAll() {
-  turnPumpOFF();
-  Blynk.virtualWrite(V3, 0); v3_open = false;
+  stopPump();
   Blynk.virtualWrite(V4, 0); v4_open = false;
   Blynk.virtualWrite(V5, 0); v5_open = false;
-  Blynk.virtualWrite(V6, 0); v6_open = false;
-  Serial.println("MASTER: 30-Minute Cycle Finished. System Reset.");
+  pumpError = false;
+  Serial.println("[MASTER] System Reset");
 }
 
 void evaluatePumpState() {
-  bool anyOutletOpen = (v4_open || v6_open);
-  
-  // ⛔ PRIORITY 1: Safety Shuts & Force Stop
+  // Only Valve A and Valve D are actually flowing water now
+  bool demand = (v5_open || v4_open);
+
+  // 🚨 PRIORITY 1: SAFETY
   if (rainLockout || pumpError || pumpMode == 2) {
-    turnPumpOFF();
-    if (pumpMode == 2) Serial.println("[MODE] Pump Force Disabled");
-  } 
-  // 🚀 PRIORITY 2: Manual Start
-  else if (pumpMode == 1) {
-    turnPumpON();
-    Serial.println("[MODE] Pump Force Started");
+    stopPump();
+    return;
   }
-  // ⚙️ PRIORITY 3: Auto Mode
+
+  // 🚀 PRIORITY 2: FORCE RUN
+  if (pumpMode == 1) {
+    allowPump();
+  }
+  // ⚙️ PRIORITY 3: AUTO
   else {
-    if (anyOutletOpen) {
-      turnPumpON();
+    if (demand) {
+      allowPump();
     } else {
-      turnPumpOFF();
+      stopPump();
     }
   }
 
-  // --- Post-Activation Monitoring (Safety) ---
-  if (pumpState && !pumpError) {
+  // ================= SAFETY MONITOR =================
+  if (pumpRunning && !pumpError) {
     unsigned long runTime = millis() - pumpStartTime;
 
-    // Dry-Run Protection (15s Window)
+    // Dry-run protection (15s window)
     if (runTime > 15000 && runTime < 20000) {
       if (flowE < 0.1) {
-        Serial.println("DRY RUN DETECTED! Shutting down.");
+        Serial.println("[ERROR] Dry Run! No water flow detected.");
         pumpError = true;
-        masterResetAll();
-        Blynk.logEvent("pump_error", "Dry Run Detected! Hardware protected.");
-        return; 
+        stopPump();
+        Blynk.logEvent("pump_error", "Dry Run Detected!");
       }
     }
 
-    // 30-Minute Master Cap
+    // 30-minute safety cutoff
     if (runTime >= 1800000) {
+      Serial.println("[SAFETY] 30 min timeout");
       masterResetAll();
     }
   }
 }
 
-void syncCloudData() {
-  Blynk.syncVirtual(V3, V4, V5, V6, V12); 
-  Blynk.syncVirtual(V0); 
-}
+// ================== CLOUD ==================
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(wifiLedPin, HIGH);   // 🔆 LED ON - WiFi OK
-    Serial.println("✅ WiFi OK");
+    digitalWrite(wifiLedPin, HIGH);
   } else {
-    digitalWrite(wifiLedPin, LOW);  // ⚫ LED OFF - WiFi Lost
-    Serial.println("📶 WiFi reconnect...");
+    digitalWrite(wifiLedPin, LOW);
     WiFi.begin(ssid, pass);
+    Serial.println("[WIFI] Reconnecting...");
   }
 }
 
 void logToGoogleSheets() {
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-
-    String url = String(googleScriptUrl) + "?pump=" + String(pumpState);
-    http.begin(client, url);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.GET();
-    http.end();
-  }
+  if (WiFi.status() != WL_CONNECTED) return;
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+  String url = String("https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec") + "?pump=" + String(pumpRunning);
+  http.begin(client, url);
+  http.GET();
+  http.end();
 }
 
-// ================== BLYNK HANDLERS ==================
+// ================== BLYNK ==================
 
-BLYNK_WRITE(V3) { v3_open = param.asInt(); }
-BLYNK_WRITE(V4) { v4_open = param.asInt(); }
-BLYNK_WRITE(V5) { v5_open = param.asInt(); }
-BLYNK_WRITE(V6) { v6_open = param.asInt(); }
-BLYNK_WRITE(V12){ rainLockout = param.asInt(); }
-BLYNK_WRITE(V0) { flowE = param.asFloat(); }
+BLYNK_WRITE(V4)  { v4_open = param.asInt(); evaluatePumpState(); }
+BLYNK_WRITE(V5)  { v5_open = param.asInt(); evaluatePumpState(); }
+BLYNK_WRITE(V12) { rainLockout = param.asInt(); evaluatePumpState(); }
+BLYNK_WRITE(V0)  { flowE = param.asFloat(); }
+BLYNK_WRITE(V13) { pumpMode = param.asInt(); evaluatePumpState(); }
 
-BLYNK_WRITE(V13) {
-  pumpMode = param.asInt();
-  Serial.print("[MODE] New Master Switch State: ");
-  Serial.println(pumpMode);
+BLYNK_CONNECTED() {
+  Blynk.syncVirtual(V4, V5, V12, V13);
+  Serial.println("✅ Pam Connected");
 }
 
 // ================== SETUP ==================
@@ -181,31 +161,23 @@ void setup() {
   pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
   pinMode(wifiLedPin, OUTPUT);
-  digitalWrite(wifiLedPin, LOW); // Default OFF
   
-  digitalWrite(relayPin, HIGH); // Default OFF
-  updateLED();                  // Sync custom LED with initial relay state
-
-  // Visual feedback
-  startupBlink(5, 200);
-
+  stopPump(); // Start with pump OFF
+  
   WiFi.begin(ssid, pass);
   Blynk.config(auth);
-
+  
   esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 30000,
-      .idle_core_mask = 0,
-      .trigger_panic = true,
+    .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
   };
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(1000L, evaluatePumpState); // High responsiveness
-  timer.setInterval(5000L, syncCloudData);
-  timer.setInterval(10000L, checkWiFi);         // WiFi indicator update
+  timer.setInterval(1000L, evaluatePumpState);
+  timer.setInterval(10000L, checkWiFi);
   timer.setInterval(300000L, logToGoogleSheets);
-  
-  Serial.println("[SYSTEM] Pump Node Ready");
+
+  Serial.println("[SYSTEM] Pump Node Ready (3-Wire Sync Mode)");
 }
 
 void loop() {
