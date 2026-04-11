@@ -1,6 +1,6 @@
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "JM9P4q32gJOpSwRtCuwPiQ6iY_IwCGPj"
+#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
