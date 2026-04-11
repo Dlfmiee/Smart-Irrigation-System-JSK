@@ -21,6 +21,7 @@ char pass[] = "datangsurau";
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <time.h>
 #include <esp_task_wdt.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
@@ -32,12 +33,12 @@ float tdsValue = 0;
 float ecValue = 0;
 
 BlynkTimer timer;
-float lastEcValue = -1;   // For delta logging
-int lastFloatStatus = -1; // For delta logging
+float lastEcValue = -1;
+int lastFloatStatus = -1;
+int lastReportDay = -1;  // Tracks daily reporting
 
 /************ FUNCTION ************/
-void sendToBlynk() {
-
+void readSensors() {
   // ===== FLOAT SWITCH =====
   int floatState = digitalRead(FLOAT_PIN);
   int floatStatus = (floatState == LOW) ? 1 : 0;
@@ -48,57 +49,49 @@ void sendToBlynk() {
   tdsValue = (voltage / VREF) * 1000.0;
   ecValue = tdsValue / 500.0;
 
-  // ===== SERIAL =====
-  Serial.print("FLOAT: ");
-  Serial.print(floatStatus ? "ON" : "OFF");
-  Serial.print(" | TDS: ");
-  Serial.print(tdsValue, 0);
-  Serial.print(" ppm | EC: ");
-  Serial.print(ecValue, 2);
-  Serial.println(" ms/cm");
-
-  // ===== SEND TO BLYNK (Delta Check) =====
-  if (lastFloatStatus != floatStatus) {
-    Blynk.virtualWrite(V1, floatStatus);
-    lastFloatStatus = floatStatus;
-    Serial.println("[BLYNK] Sent float status.");
-  }
-  if (abs(ecValue - lastEcValue) > 0.05) {
-    Blynk.virtualWrite(V2, ecValue);
-    lastEcValue = ecValue;
-    Serial.println("[BLYNK] Sent EC value.");
-  }
-  if (lastFloatStatus == floatStatus && abs(ecValue - lastEcValue) <= 0.05) {
-    Serial.println("[DELTA] No change, skipping Blynk.");
-  }
-
-  // ===== HEARTBEAT LED =====
-  digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+  // ===== LOCAL SERIAL MONITOR (Every min) =====
+  Serial.print("[MONITOR] Float: ");
+  Serial.print(floatStatus ? "FULL" : "LOW");
+  Serial.print(" | EC: ");
+  Serial.println(ecValue, 2);
 }
 
-void logToGoogleSheets() {
+void sendDailyReport() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
   int floatState = digitalRead(FLOAT_PIN);
   int floatStatus = (floatState == LOW) ? 1 : 0;
-  String statusStr = floatStatus ? "TANK_FULL" : "TANK_LOW";
 
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
+  Serial.println("📢 [REPORT] Sending Daily Data (07:00 AM)...");
 
-    String url = String(googleScriptUrl) + "?ec=" + String(ecValue, 2) + "&tank=" + String(floatStatus);
+  // 1. Send to Blynk
+  Blynk.virtualWrite(V1, floatStatus);
+  Blynk.virtualWrite(V2, ecValue);
 
-    Serial.print("Logging to Google Sheets: ");
-    http.begin(client, url);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    int httpCode = http.GET();
-    
-    if (httpCode > 0) {
-      Serial.println("OK (" + String(httpCode) + ")");
-    } else {
-      Serial.println("FAILED (" + http.errorToString(httpCode) + ")");
-    }
-    http.end();
+  // 2. Send to Google Sheets
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient http;
+
+  String url = String(googleScriptUrl) + "?ec=" + String(ecValue, 2) + "&tank=" + String(floatStatus);
+  
+  http.begin(client, url);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  int httpCode = http.GET();
+  
+  if (httpCode > 0) Serial.println("[REPORT] Sheets Success");
+  else Serial.println("[REPORT] Sheets Failed");
+  http.end();
+}
+
+void checkDailySchedule() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return;
+
+  // Run at 07:00 AM once per day
+  if (timeinfo.tm_hour == 7 && lastReportDay != timeinfo.tm_mday) {
+    sendDailyReport();
+    lastReportDay = timeinfo.tm_mday;
   }
 }
 
@@ -126,6 +119,7 @@ void setup() {
 
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
+  configTime(28800, 0, "pool.ntp.org");
 
   // Hardware Watchdog: reboot if loop freezes for 30 seconds
   esp_task_wdt_config_t twdt_config = {
@@ -136,9 +130,9 @@ void setup() {
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(60000L, sendToBlynk);
-  timer.setInterval(10000L, checkWiFi);
-  timer.setInterval(300000L, logToGoogleSheets); // Log every 5 minutes
+  timer.setInterval(60000L, readSensors);         // Local view every min
+  timer.setInterval(30000L, checkWiFi);           // Wifi check 30s
+  timer.setInterval(30000L, checkDailySchedule); // Schedule check 30s
 
   Serial.println("SYSTEM START - ESP32 + BLYNK");
 }
