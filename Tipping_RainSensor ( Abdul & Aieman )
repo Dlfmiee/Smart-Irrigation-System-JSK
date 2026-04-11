@@ -1,7 +1,7 @@
 #define BLYNK_PRINT Serial
 #define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN "4q3N1x2CkTYvtH8QbCXCZ49vU9CwoXqO"
+#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -11,14 +11,14 @@
 #include <esp_task_wdt.h>
 
 // ================== WIFI ==================
-char ssid[] = "SurauAl-Irfan";
-char pass[] = "datangsurau";
+char ssid[] = "Taptul";
+char pass[] = "Aieman123";
 
 // ================== GOOGLE SHEETS ==================
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 // ================== BRIDGE ==================
-const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
+const char* MASTER_PUMP_TOKEN = "PUMP_DEVICE_TOKEN";
 
 // ================== PIN ==================
 #define REED_PIN 27
@@ -215,7 +215,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(REED_PIN), handleTip, FALLING);
 
   // Timers
-  timer.setInterval(2000L, processRain);
+  timer.setInterval(5000L, processRain);
   timer.setInterval(300000L, logToGoogleSheets);
   timer.setInterval(30000L, checkMidnightReset);
   timer.setInterval(10000L, checkWiFi);

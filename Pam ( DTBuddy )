@@ -140,7 +140,7 @@ void fetchRemoteValveStatus() {
   if (http.GET() > 0) v5_open = (http.getString().toInt() == 1);
   http.end();
 
-  String urlB = "https://blynk.cloud/external/api/get?token=" + String(ALTF4_TOKEN) + "&V6";
+String urlB = "https://blynk.cloud/external/api/get?token=" + String(ALTF4_TOKEN) + "&V6";
   http.begin(client, urlB);
   if (http.GET() > 0) v6_open = (http.getString().toInt() == 1);
   http.end();
