@@ -53,12 +53,12 @@ bool shouldPublishToBlynk() {
   int minute = timeinfo->tm_min;
   int day = timeinfo->tm_yday;
   
-  // Check if it's 7:30 AM or 3:30 PM (15:30)
-  bool is7_30 = (hour == 7 && minute >= 30 && minute < 35);
-  bool is15_30 = (hour == 15 && minute >= 30 && minute < 35);
+  // Check if it's 7:31 AM or 3:31 PM (15:31)
+  bool is7_31 = (hour == 7 && minute >= 31 && minute < 35);
+  bool is15_31 = (hour == 15 && minute >= 31 && minute < 35);
   
   // Make sure we only publish once per day at each time
-  if ((is7_30 || is15_30) && day != lastPublishDay) {
+  if ((is7_31 || is15_31) && day != lastPublishDay) {
     lastPublishDay = day;
     return true;
   }

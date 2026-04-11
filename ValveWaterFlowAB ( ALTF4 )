@@ -160,8 +160,8 @@ void checkSchedule() {
   int hour = timeinfo.tm_hour;
   int minute = timeinfo.tm_min;
 
-  // 1. T-30 Mins (07:30): Fetch Environment Data
-  if (hour == 7 && minute == 30 && lastCheckHour != hour) {
+  // 1. T-27 Mins (07:33): Fetch Environment Data
+  if (hour == 7 && minute == 33 && lastCheckHour != hour) {
     Serial.println("📢 T-30 [ALTF4]: Fetching Sensor Data...");
     fetchGlobalData();
     lastCheckHour = hour;
