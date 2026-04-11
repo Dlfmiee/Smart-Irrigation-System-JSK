@@ -105,13 +105,13 @@ void fetchGlobalData() {
 // ================== VALVE C ==================
 
 void openValveC() {
-  digitalWrite(RELAY_C_PIN, LOW);
+  digitalWrite(RELAY_C_PIN, HIGH);
   Blynk.virtualWrite(VPIN_VALVE_C, 1);
   Serial.println("[C] Valve C OPEN");
 }
 
 void closeValveC() {
-  digitalWrite(RELAY_C_PIN, HIGH);
+  digitalWrite(RELAY_C_PIN, LOW);
   Blynk.virtualWrite(VPIN_VALVE_C, 0);
   Serial.println("[C] Valve C CLOSED");
 }
@@ -119,14 +119,14 @@ void closeValveC() {
 // ================== VALVE D ==================
 
 void openValveD() {
-  digitalWrite(RELAY_D_PIN, LOW);
+  digitalWrite(RELAY_D_PIN, HIGH);
   Blynk.virtualWrite(VPIN_VALVE_D, 1);
   shoutToMasterPump(4, 1); // Tell Pump that Valve D is OPEN
   Serial.println("[D] Valve D OPEN");
 }
 
 void closeValveD() {
-  digitalWrite(RELAY_D_PIN, HIGH);
+  digitalWrite(RELAY_D_PIN, LOW);
   Blynk.virtualWrite(VPIN_VALVE_D, 0);
   shoutToMasterPump(4, 0); // Tell Pump that Valve D is CLOSED
   Serial.println("[D] Valve D CLOSED");

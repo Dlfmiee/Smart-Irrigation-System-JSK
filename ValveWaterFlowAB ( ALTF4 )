@@ -7,7 +7,7 @@
 
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN    "JM9P4q32gJOpSwRtCuwPiQ6iY_IwCGPj"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
@@ -45,13 +45,13 @@ int lastLeakCheckDay = -1;
 // ================== VALVE A ==================
 
 void openValveA() {
-  digitalWrite(RELAY_A_PIN, LOW);        // Active LOW = energize
+  digitalWrite(RELAY_A_PIN, HIGH);        // Active LOW = energize
   Blynk.virtualWrite(VPIN_VALVE_A, 1);
   Serial.println("[A] Valve A OPEN");
 }
 
 void closeValveA() {
-  digitalWrite(RELAY_A_PIN, HIGH);       // De-energize
+  digitalWrite(RELAY_A_PIN, LOW);       // De-energize
   Blynk.virtualWrite(VPIN_VALVE_A, 0);
   Serial.println("[A] Valve A CLOSED");
 }
@@ -59,13 +59,13 @@ void closeValveA() {
 // ================== VALVE B ==================
 
 void openValveB() {
-  digitalWrite(RELAY_B_PIN, LOW);        // Active LOW = energize
+  digitalWrite(RELAY_B_PIN, HIGH);        // Active LOW = energize
   Blynk.virtualWrite(VPIN_VALVE_B, 1);
   Serial.println("[B] Valve B OPEN");
 }
 
 void closeValveB() {
-  digitalWrite(RELAY_B_PIN, HIGH);       // De-energize
+  digitalWrite(RELAY_B_PIN, LOW);       // De-energize
   Blynk.virtualWrite(VPIN_VALVE_B, 0);
   Serial.println("[B] Valve B CLOSED");
 }
