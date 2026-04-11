@@ -1,10 +1,10 @@
 /*
   Valve CD Controller (Cyberspark) - INDEPENDENT DEVICE
-  V3 = Valve C (Pin 26)
+  V3 = Valve C (Pin 14)
   V4 = Valve D (Pin 27)
   Schedule: 04:00 PM Open, 04:30 PM Close
   Logic: Active-HIGH (HIGH=OPEN, LOW=CLOSED)
-  Stagger: 7 seconds between C and D
+  Bridge: Syncs V3/V4 to Master Pump
 */
 
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
@@ -40,10 +40,10 @@ BlynkTimer timer;
 int lastOpenHour  = -1;
 int lastCloseHour = -1;
 
-// Staging Variables (Pre-Check via HTTP)
-int envMoisture = 0;      // V7
-bool envRain = false;     // V12
-float envFlow = 0;        // V0
+// Staging Variables (Pre-Check via HTTP Fetch)
+int envMoisture = 0;      
+bool envRain = false;     
+float envFlow = 0;        
 bool envConditionOK = false;
 bool leakDetected = false;
 int lastCheckHour = -1;
@@ -58,7 +58,6 @@ void shoutToMasterPump(int vPin, int value) {
   client.setInsecure();
   HTTPClient http;
   
-  // Update the Master Pump's state via HTTP API
   String url = "https://blynk.cloud/external/api/update?token=" + 
                String(MASTER_PUMP_TOKEN) + "&v" + String(vPin) + "=" + String(value);
   
@@ -80,19 +79,16 @@ void fetchGlobalData() {
   client.setInsecure();
   HTTPClient http;
   
-  // 1. Fetch V7 (Moisture)
   String urlV7 = "https://blynk.cloud/external/api/get?token=" + String(MASTER_PUMP_TOKEN) + "&V7";
   http.begin(client, urlV7);
   if (http.GET() > 0) envMoisture = http.getString().toInt();
   http.end();
   
-  // 2. Fetch V12 (Rain)
   String urlV12 = "https://blynk.cloud/external/api/get?token=" + String(MASTER_PUMP_TOKEN) + "&V12";
   http.begin(client, urlV12);
   if (http.GET() > 0) envRain = (http.getString().toInt() == 1);
   http.end();
   
-  // 3. Fetch V0 (Flow)
   String urlV0 = "https://blynk.cloud/external/api/get?token=" + String(MASTER_PUMP_TOKEN) + "&V0";
   http.begin(client, urlV0);
   if (http.GET() > 0) envFlow = http.getString().toFloat();
@@ -103,53 +99,56 @@ void fetchGlobalData() {
   Serial.print(" | F: "); Serial.println(envFlow);
 }
 
-// ================== VALVE C ==================
+// ================== VALVE CONTROL ==================
 
 void openValveC() {
-  digitalWrite(RELAY_C_PIN, HIGH);       // Active HIGH = OPEN
+  digitalWrite(RELAY_C_PIN, HIGH);
   Blynk.virtualWrite(VPIN_VALVE_C, 1);
-  shoutToMasterPump(3, 1);                // Tell Pump that Valve C is OPEN
+  shoutToMasterPump(3, 1);
   Serial.println("[C] Valve C OPEN");
 }
 
 void closeValveC() {
-  digitalWrite(RELAY_C_PIN, LOW);        // Active HIGH = CLOSED
+  digitalWrite(RELAY_C_PIN, LOW);
   Blynk.virtualWrite(VPIN_VALVE_C, 0);
-  shoutToMasterPump(3, 0);                // Tell Pump that Valve C is CLOSED
+  shoutToMasterPump(3, 0);
   Serial.println("[C] Valve C CLOSED");
 }
 
-// ================== VALVE D ==================
-
 void openValveD() {
-  digitalWrite(RELAY_D_PIN, HIGH);       // Active HIGH = OPEN
+  digitalWrite(RELAY_D_PIN, HIGH);
   Blynk.virtualWrite(VPIN_VALVE_D, 1);
-  shoutToMasterPump(4, 1);                // Tell Pump that Valve D is OPEN
+  shoutToMasterPump(4, 1);
   Serial.println("[D] Valve D OPEN");
 }
 
 void closeValveD() {
-  digitalWrite(RELAY_D_PIN, LOW);        // Active HIGH = CLOSED
+  digitalWrite(RELAY_D_PIN, LOW);
   Blynk.virtualWrite(VPIN_VALVE_D, 0);
-  shoutToMasterPump(4, 0);                // Tell Pump that Valve D is CLOSED
+  shoutToMasterPump(4, 0);
   Serial.println("[D] Valve D CLOSED");
 }
 
 // ================== BLYNK HANDLERS ==================
 
 BLYNK_WRITE(VPIN_VALVE_C) {
-  if (param.asInt() == 1) openValveC();
-  else                    closeValveC();
+  int val = param.asInt();
+  Serial.print("[BLYNK] V3 received: "); Serial.println(val);
+  if (val == 1) openValveC();
+  else          closeValveC();
 }
 
 BLYNK_WRITE(VPIN_VALVE_D) {
-  if (param.asInt() == 1) openValveD();
-  else                    closeValveD();
+  int val = param.asInt();
+  Serial.print("[BLYNK] V4 received: "); Serial.println(val);
+  if (val == 1) openValveD();
+  else          closeValveD();
 }
 
 BLYNK_CONNECTED() {
+  Serial.println("[BLYNK] Connected! Syncing virtual pins...");
   Blynk.syncVirtual(VPIN_VALVE_C, VPIN_VALVE_D);
-  Serial.println("✅ Cyberspark Connected (Unique Token - Active-HIGH Mode)");
+  Serial.println("✅ Cyberspark Connected & Synced (Optimized)");
 }
 
 // ================== SCHEDULE ==================
@@ -158,7 +157,7 @@ void checkSchedule() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) return;
 
-  int hour   = timeinfo.tm_hour;
+  int hour = timeinfo.tm_hour;
   int minute = timeinfo.tm_min;
 
   // 1. T-30 Mins (15:30): Fetch Environment Data
@@ -168,10 +167,10 @@ void checkSchedule() {
     lastCheckHour = hour;
     if (envRain) {
       envConditionOK = false;
-      Serial.println("⚠️ Pre-check FAIL: Rain Lockout.");
+      Serial.println("⚠️ Pre-check FAIL: Rain Lockout active.");
     } else if (envMoisture >= 80) {
       envConditionOK = false;
-      Serial.println("⚠️ Pre-check FAIL: Soil too wet.");
+      Serial.println("⚠️ Pre-check FAIL: Soil is too wet.");
     } else {
       envConditionOK = true;
       Serial.println("✅ Pre-check PASS: Conditions OK.");
@@ -181,7 +180,7 @@ void checkSchedule() {
   // 2. T-30 Secs (15:59): Fetch Flow for Leak Check
   if (hour == 15 && minute == 59 && lastLeakCheckHour != hour) {
     Serial.println("📢 T-30s [Cyberspark]: Fetching Flow for Leak Check...");
-    fetchGlobalData(); // refresh all, including flow
+    fetchGlobalData(); // refresh
     lastLeakCheckHour = hour;
     if (envFlow > 0.05) {
       leakDetected = true;
@@ -192,7 +191,7 @@ void checkSchedule() {
     }
   }
 
-  // 3. 04:00 PM - Process Staggered Start
+  // 3. 04:00 PM (16:00) - Process Execution
   if (hour == 16 && minute == 0 && lastOpenHour != hour) {
     lastOpenHour = hour;
     if (envConditionOK && !leakDetected) {
@@ -206,7 +205,7 @@ void checkSchedule() {
     }
   }
 
-  // 4. 04:30 PM - Close staggered (Always runs if opened)
+  // 4. 04:30 PM (16:30) - Close staggered
   if (hour == 16 && minute == 30 && lastCloseHour != hour) {
     Serial.println("⏰ Schedule: 16:30 - Closing Valve C (D follows in 7s)");
     closeValveC();
@@ -222,8 +221,8 @@ void checkWiFi() {
     digitalWrite(WIFI_LED_PIN, HIGH);
   } else {
     digitalWrite(WIFI_LED_PIN, LOW);
+    Serial.println("[WIFI] Attempting to reconnect...");
     WiFi.begin(ssid, pass);
-    Serial.println("[WiFi] Reconnecting...");
   }
 }
 
@@ -231,18 +230,43 @@ void checkWiFi() {
 
 void setup() {
   Serial.begin(115200);
+  delay(500);
+  Serial.println("\n\n[STARTUP] Initializing Cyberspark (Valve CD)...");
 
   pinMode(RELAY_C_PIN, OUTPUT);
   pinMode(RELAY_D_PIN, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
 
-  // Safe default: both valves CLOSED (Active-HIGH means LOW is off)
+  // Safe default
   digitalWrite(RELAY_C_PIN, LOW);
   digitalWrite(RELAY_D_PIN, LOW);
   digitalWrite(WIFI_LED_PIN, LOW);
 
+  Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
   WiFi.begin(ssid, pass);
+  
+  // Robust WiFi Wait
+  int wifiAttempts = 0;
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) {
+    delay(500);
+    Serial.print(".");
+    wifiAttempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi Connected! IP: " + WiFi.localIP().toString());
+  } else {
+    Serial.println("\n❌ WiFi Connection FAILED!");
+  }
+
+  Serial.println("[SETUP] Configuring Blynk...");
   Blynk.config(BLYNK_AUTH_TOKEN);
+  
+  if (!Blynk.connected()) {
+    Serial.println("[SETUP] Connecting to Blynk server...");
+    Blynk.connect();
+  }
+
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
 
   // Watchdog 30s
@@ -255,11 +279,15 @@ void setup() {
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(60000L, checkSchedule);
 
-  Serial.println("🚀 Cyberspark Independent Mode - Logic & Safety Corrected");
+  Serial.println("[SYSTEM] Cyberspark Ready (Independent Sync Mode)");
 }
 
 void loop() {
-  Blynk.run();
+  if (Blynk.connected()) {
+    Blynk.run();
+  } else {
+    Blynk.connect();
+  }
   timer.run();
   esp_task_wdt_reset();
 }

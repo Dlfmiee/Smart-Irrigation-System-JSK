@@ -4,180 +4,101 @@
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
-#include <esp_task_wdt.h>
+#include <time.h>
 
-const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
-const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; // DTBuddy
-
-/************ WIFI ************/
+// WiFi credentials
 char ssid[] = "SurauAl-Irfan";
 char pass[] = "datangsurau";
 
 // Soil sensor pins
-#define SOIL1 34
-#define SOIL2 35
-#define SOIL3 32
-#define WIFI_LED_PIN 2 // Built-in Wi-Fi Status LED
+#define SENSOR1 34
+#define SENSOR2 35
+#define SENSOR3 32
 
 // Calibration values
-int dryThreshold = 2500;   // 0%
-int wetThreshold = 1800;   // 100%
+int dryValue = 4095;   // completely dry
+int wetValue = 1500;   // completely wet
 
-bool soil1Dry;
-bool soil2Dry;
-bool soil3Dry;
+// Time settings (Malaysia UTC+8)
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 8 * 3600;
+const int daylightOffset_sec = 0;
 
-BlynkTimer timer;
-int lastSoilAvg = -1;
+// To prevent multiple sending
+bool sentMorning = false;
+bool sentEvening = false;
 
-/************ CONVERT TO % ************/
-int convertToPercentage(int value) {
-  int percent = map(value, dryThreshold, wetThreshold, 0, 100);
-
-  if (percent > 100) percent = 100;
-  if (percent < 0) percent = 0;
-
+int readSoilPercent(int pin) {
+  int value = analogRead(pin);
+  int percent = map(value, dryValue, wetValue, 0, 100);
+  percent = constrain(percent, 0, 100);
   return percent;
 }
 
-/************ BRIDGE TO PUMP ************/
-void shoutToMasterPump(int lockoutValue) {
-  if (WiFi.status() != WL_CONNECTED) return;
-  
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-  
-  String url = "https://blynk.cloud/external/api/update?token=" + String(MASTER_PUMP_TOKEN) + "&v12=" + String(lockoutValue);
-  
-  Serial.print("[BRIDGE] Syncing Pump V12 -> ");
-  Serial.println(lockoutValue);
-  
-  http.begin(client, url);
-  int httpCode = http.GET();
-  if (httpCode > 0) {
-    Serial.println("[BRIDGE] Success: " + String(httpCode));
-  } else {
-    Serial.println("[BRIDGE] Failed: " + http.errorToString(httpCode));
-  }
-  http.end();
-}
+void sendSoilData() {
+  int s1 = readSoilPercent(SENSOR1);
+  int s2 = readSoilPercent(SENSOR2);
+  int s3 = readSoilPercent(SENSOR3);
 
-/************ SEND TO BLYNK ************/
-void sendMoistureToBlynk() {
-  int v1 = analogRead(SOIL1);
-  int v2 = analogRead(SOIL2);
-  int v3 = analogRead(SOIL3);
+  int average = (s1 + s2 + s3) / 3;
 
-  int p1 = convertToPercentage(v1);
-  int p2 = convertToPercentage(v2);
-  int p3 = convertToPercentage(v3);
-
-  int avgPercent = (p1 + p2 + p3) / 3;
-  int avgRaw = (v1 + v2 + v3) / 3;
-
-  soil1Dry = (v1 > dryThreshold);
-  soil2Dry = (v2 > dryThreshold);
-  soil3Dry = (v3 > dryThreshold);
-
-  Serial.print("Soil Avg (%): ");
-  Serial.print(avgPercent);
-  Serial.print(" | S1: "); Serial.print(p1);
-  Serial.print("% | S2: "); Serial.print(p2);
-  Serial.print("% | S3: "); Serial.print(p3);
+  Serial.print("Soil Moisture Avg: ");
+  Serial.print(average);
   Serial.println("%");
 
-  if (abs(avgPercent - lastSoilAvg) > 2) {
-    Blynk.virtualWrite(V7, avgPercent);
-    lastSoilAvg = avgPercent;
-    Serial.println("[BLYNK] Sent moisture %.");
-  } else {
-    Serial.println("[DELTA] No change, skipping Blynk.");
+  // Send ONLY average to V0 as requested
+  Blynk.virtualWrite(V0, average);
+}
+
+void checkTimeAndSend() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to obtain time");
+    return;
   }
 
-  // Rain lockout trigger (if soil extremely wet)
-  if (avgRaw < wetThreshold) {
-    Blynk.virtualWrite(V12, 1);
-    Serial.println("Soil extremely wet! Rain Lockout ON.");
-    shoutToMasterPump(1);
+  int hour = timeinfo.tm_hour;
+  int minute = timeinfo.tm_min;
+
+  // Reset flags at midnight
+  if (hour == 0 && minute == 0) {
+    sentMorning = false;
+    sentEvening = false;
+  }
+
+  // 7:30 AM trigger
+  if (hour == 7 && minute == 30 && !sentMorning) {
+    sendSoilData();
+    sentMorning = true;
+  }
+
+  // 3:30 PM trigger
+  if (hour == 15 && minute == 30 && !sentEvening) {
+    sendSoilData();
+    sentEvening = true;
   }
 }
 
-/************ GOOGLE SHEETS ************/
-void logToGoogleSheets() {
-  int v1 = analogRead(SOIL1);
-  int v2 = analogRead(SOIL2);
-  int v3 = analogRead(SOIL3);
-
-  int avgRaw = (v1 + v2 + v3) / 3;
-  int avgPercent = convertToPercentage(avgRaw);
-
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFiClientSecure client;
-    client.setInsecure();
-    HTTPClient http;
-
-    String url = String(googleScriptUrl) + "?moisture=" + String(avgPercent);
-
-    Serial.print("Logging to Google Sheets: ");
-    http.begin(client, url);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-
-    int httpCode = http.GET();
-
-    if (httpCode > 0) {
-      Serial.println("OK (" + String(httpCode) + ")");
-    } else {
-      Serial.println("FAILED (" + http.errorToString(httpCode) + ")");
-    }
-
-    http.end();
-  }
-}
-
-void checkWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH);   // 🔆 LED ON - WiFi OK
-    Serial.println("✅ WiFi OK");
-  } else {
-    digitalWrite(WIFI_LED_PIN, LOW);  // ⚫ LED OFF - WiFi Lost
-    Serial.println("📶 WiFi reconnect...");
-    WiFi.begin(ssid, pass);
-  }
-}
-
-/************ SETUP ************/
 void setup() {
   Serial.begin(115200);
 
-  pinMode(SOIL1, INPUT);
-  pinMode(SOIL2, INPUT);
-  pinMode(SOIL3, INPUT);
-  pinMode(WIFI_LED_PIN, OUTPUT);
-  digitalWrite(WIFI_LED_PIN, LOW);
+  pinMode(SENSOR1, INPUT);
+  pinMode(SENSOR2, INPUT);
+  pinMode(SENSOR3, INPUT);
 
   WiFi.begin(ssid, pass);
-  Blynk.config(BLYNK_AUTH_TOKEN);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
 
-  esp_task_wdt_config_t twdt_config = {
-    .timeout_ms = 30000,
-    .idle_core_mask = 0,
-    .trigger_panic = true,
-  };
-
-  esp_task_wdt_init(&twdt_config);
-  esp_task_wdt_add(NULL);
-
-  timer.setInterval(60000L, sendMoistureToBlynk);
-  timer.setInterval(10000L, checkWiFi);
-  timer.setInterval(300000L, logToGoogleSheets);
+  Serial.println("\n✅ WiFi Connected");
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
 }
 
-/************ LOOP ************/
 void loop() {
   Blynk.run();
-  timer.run();
-  esp_task_wdt_reset();
+  checkTimeAndSend();
+  delay(1000); // Check every second
 }
