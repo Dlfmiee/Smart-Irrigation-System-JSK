@@ -1,7 +1,6 @@
-#define BLYNK_PRINT Serial
-#define BLYNK_TEMPLATE_ID "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -10,36 +9,38 @@
 #include <time.h>
 #include <esp_task_wdt.h>
 
-// ================== WIFI ==================
-char ssid[] = "Taptul";
-char pass[] = "Aieman123";
+/* 
+  Tipping Rain Sensor (Abdul & Aieman)
+  - Uses SHARED AUTH TOKEN with Pump (MbA2... )
+  - Reports Rainfall (V8) and Lockout (V12)
+  - Schedule: Only communicates at 07:30 AM and 03:30 PM
+*/
 
-// ================== GOOGLE SHEETS ==================
+char ssid[] = "Fmz";
+char pass[] = "iiiiiiii";
+
+// --- EXTERNAL LINKS ---
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-// ================== BRIDGE ==================
-const char* MASTER_PUMP_TOKEN = "PUMP_DEVICE_TOKEN";
+// --- PIN DEFINITIONS ---
+#define REED_PIN 32         // Tipping Bucket Reed Switch
+#define RAIN_SENSOR_PIN 34  // Analog Rain Probe
+#define WIFI_LED_PIN 2      // Built-in LED
 
-// ================== PIN ==================
-#define REED_PIN 27
-#define RAIN_SENSOR_PIN 34
-#define WIFI_LED_PIN 2
+// --- CONSTANTS ---
+const float RAIN_PER_TIP = 0.2;     // 0.2mm per tip
+const int RAIN_THRESHOLD = 2000;   // Analog threshold (Lower = Wetter)
+const float LOCKOUT_THRESHOLD = 5.0; // Daily rain limit (mm)
+const unsigned long rainTimeout = 10000; // 10s sensor window
 
-// ================== RAIN CONFIG ==================
-const float RAIN_PER_TIP = 0.2;
-const int RAIN_THRESHOLD = 2000;
-const float LOCKOUT_THRESHOLD = 5.0;
-const unsigned long rainTimeout = 10000; // 10 sec
-
-// ================== GLOBAL ==================
+// --- GLOBAL VARIABLES ---
 volatile unsigned long tipCount = 0;
 volatile unsigned long lastDebounceTime = 0;
-const unsigned long debounceDelay = 150;
+const unsigned long debounceDelay = 50;
 
 unsigned long lastTipTime = 0;
-bool rainLockout = false;
 int lastResetDay = -1;
-int lastRainValue = -1;
+int lastPublishHour = -1;
 
 BlynkTimer timer;
 
@@ -53,136 +54,79 @@ void IRAM_ATTR handleTip() {
   }
 }
 
-// ================== BRIDGE FUNCTION ==================
-void shoutToMasterPump(int value) {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
-
-  String url = "https://blynk.cloud/external/api/update?token=" + 
-               String(MASTER_PUMP_TOKEN) + "&v12=" + String(value);
-
-  Serial.print("[BRIDGE] Sending -> ");
-  Serial.println(value);
-
-  http.begin(client, url);
-  int httpCode = http.GET();
-
-  if (httpCode > 0) {
-    Serial.println("[BRIDGE] Success");
-  } else {
-    Serial.println("[BRIDGE] Failed");
-  }
-  http.end();
-}
-
-// ================== MAIN PROCESS ==================
-void processRain() {
-  int rainValue = analogRead(RAIN_SENSOR_PIN);
-  float rainfall = tipCount * RAIN_PER_TIP;
-  unsigned long now = millis();
-
-  bool bucketRain = (now - lastTipTime < rainTimeout);
-  bool sensorRain = (rainValue < RAIN_THRESHOLD);
-  bool isRaining = bucketRain || sensorRain;
-
-  // ===== SEND TO BLYNK =====
-  Blynk.virtualWrite(V8, rainfall);
-
-  if (abs(rainValue - lastRainValue) > 100) {
-    Blynk.virtualWrite(V9, rainValue);
-    lastRainValue = rainValue;
-  }
-
-  // ===== STATUS =====
-  if (isRaining) {
-    Blynk.virtualWrite(V10, "RAINING");
-
-    if (!rainLockout) {
-      rainLockout = true;
-      Blynk.virtualWrite(V12, 1);
-      shoutToMasterPump(1);
-      Serial.println("🌧️ Rain detected -> LOCKOUT ON");
-    }
-  } else {
-    Blynk.virtualWrite(V10, "NO RAIN");
-
-    if (rainLockout) {
-      rainLockout = false;
-      Blynk.virtualWrite(V12, 0);
-      shoutToMasterPump(0);
-      Serial.println("☀️ No rain -> LOCKOUT OFF");
-    }
-  }
-
-  // ===== HEAVY RAIN CHECK =====
-  if (rainfall >= LOCKOUT_THRESHOLD) {
-    Blynk.virtualWrite(V12, 1);
-    shoutToMasterPump(1);
-    Serial.println("🚨 Heavy rain threshold reached!");
-  }
-
-  Serial.print("Rainfall: ");
-  Serial.print(rainfall);
-  Serial.print(" mm | Sensor: ");
-  Serial.print(rainValue);
-  Serial.print(" | Status: ");
-  Serial.println(isRaining ? "RAIN" : "DRY");
-}
-
-// ================== GOOGLE LOG ==================
+// ================== LOGGING ==================
 void logToGoogleSheets() {
   if (WiFi.status() != WL_CONNECTED) return;
-
   float rainfall = tipCount * RAIN_PER_TIP;
-
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-
   String url = String(googleScriptUrl) + "?rainfall=" + String(rainfall, 2);
-
-  Serial.print("[LOG] ");
-  Serial.println(url);
-
   http.begin(client, url);
-  int httpCode = http.GET();
-
-  if (httpCode > 0) {
-    Serial.println("[LOG] Success");
-  } else {
-    Serial.println("[LOG] Failed");
-  }
+  http.GET();
   http.end();
+  Serial.println("[LOG] Google Sheets updated.");
+}
+
+// ================== SCHEDULED TRANSMISSION ==================
+void checkScheduledPublish() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return;
+
+  int hour = timeinfo.tm_hour;
+  int minute = timeinfo.tm_min;
+
+  // Sync at 07:30 AM or 15:30 PM (3:30 PM)
+  if (((hour == 7 && minute == 30) || (hour == 15 && minute == 30)) && hour != lastPublishHour) {
+    lastPublishHour = hour;
+    
+    Serial.println("📤 [SCHEDULED] Updating shared virtual pins...");
+
+    float rainfall = tipCount * RAIN_PER_TIP;
+    bool isRaining = (millis() - lastTipTime < rainTimeout || analogRead(RAIN_SENSOR_PIN) < RAIN_THRESHOLD);
+    int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
+
+    // Direct Virtual Writes (Shared Account)
+    Blynk.virtualWrite(V8, rainfall);
+    Blynk.virtualWrite(V12, lockout);
+
+    // Backup to Google Sheets
+    logToGoogleSheets();
+    
+    Serial.println("✅ Sync Complete.");
+  }
+}
+
+// ================== MONITOR (SERIAL) ==================
+void monitorStatus() {
+  float rainfall = tipCount * RAIN_PER_TIP;
+  int sensorVal = analogRead(RAIN_SENSOR_PIN);
+  
+  Serial.print("Rain: "); Serial.print(rainfall); 
+  Serial.print("mm | Probe: "); Serial.println(sensorVal);
 }
 
 // ================== MIDNIGHT RESET ==================
 void checkMidnightReset() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return;
-
-  if (timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
+  if (getLocalTime(&timeinfo) && timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
     if (lastResetDay != timeinfo.tm_mday) {
       tipCount = 0;
-      rainLockout = false;
       lastResetDay = timeinfo.tm_mday;
-
+      lastPublishHour = -1;
+      
       Blynk.virtualWrite(V8, 0);
       Blynk.virtualWrite(V12, 0);
-
-      shoutToMasterPump(0);
-
-      Serial.println("🔄 Midnight reset done");
+      Serial.println("🔄 Daily Rainfall reset to 0.");
     }
   }
 }
 
-// ================== WIFI CHECK ==================
-void checkWiFi() {
+// ================== SYSTEM TASKS ==================
+void checkSystem() {
   if (WiFi.status() == WL_CONNECTED) {
     digitalWrite(WIFI_LED_PIN, HIGH);
+    if (!Blynk.connected()) Blynk.connect();
   } else {
     digitalWrite(WIFI_LED_PIN, LOW);
     WiFi.begin(ssid, pass);
@@ -199,35 +143,24 @@ void setup() {
 
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
-
   configTime(28800, 0, "pool.ntp.org");
 
-  // Watchdog
   esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 30000,
-    .idle_core_mask = 0,
-    .trigger_panic = true
+    .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
   };
   esp_task_wdt_init(&wdt_config);
   esp_task_wdt_add(NULL);
 
-  // Interrupt
   attachInterrupt(digitalPinToInterrupt(REED_PIN), handleTip, FALLING);
 
-  // Timers
-  timer.setInterval(5000L, processRain);
-  timer.setInterval(300000L, logToGoogleSheets);
+  timer.setInterval(10000L, monitorStatus);
+  timer.setInterval(10000L, checkSystem);
+  timer.setInterval(30000L, checkScheduledPublish);
   timer.setInterval(30000L, checkMidnightReset);
-  timer.setInterval(10000L, checkWiFi);
-
-  Serial.println("✅ SYSTEM STARTED");
 }
 
-// ================== LOOP ==================
 void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
-    Blynk.run();
-  }
+  if (Blynk.connected()) Blynk.run();
   timer.run();
   esp_task_wdt_reset();
 }
