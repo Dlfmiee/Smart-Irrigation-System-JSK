@@ -32,17 +32,13 @@ bool fertilizingActive = false;
 const unsigned long FERTILIZING_DURATION = 1800000; // 30 MINIT
 
 
-void forceCloseCD() {
-  Blynk.virtualWrite(V3, 0);
-  Blynk.virtualWrite(V4, 0);
-}
+
 
 // VALVE A - INLET (Full-Open Logic)
 void openValveA() { 
   digitalWrite(RELAY_A_PIN, LOW); 
   Blynk.virtualWrite(V5, 1); 
   Serial.println("Valve A (Inlet) Opened Fully"); 
-  forceCloseCD(); 
 }
 void closeValveA() { 
   digitalWrite(RELAY_A_PIN, HIGH); 
@@ -55,7 +51,6 @@ void openValveB() {
   digitalWrite(RELAY_B_PIN, LOW); 
   Blynk.virtualWrite(V6, 1); 
   Serial.println("Valve B (Outlet) Opened Fully"); 
-  forceCloseCD(); 
 }
 void closeValveB() { 
   digitalWrite(RELAY_B_PIN, HIGH); 

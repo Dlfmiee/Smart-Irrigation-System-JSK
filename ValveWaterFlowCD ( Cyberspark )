@@ -29,17 +29,13 @@ const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFV
 char ssid[] = "Fmz";
 char pass[] = "iiiiiiii";
 
-void forceCloseAB() {
-  Blynk.virtualWrite(V5, 0);
-  Blynk.virtualWrite(V6, 0);
-}
+
 
 // VALVE C - FULL OPEN
 void openValveC() { 
   digitalWrite(RELAY_C_PIN, LOW); 
   Blynk.virtualWrite(V3, 1); 
   Serial.println("🔓 Valve C: Full Open");
-  forceCloseAB();
 }
 
 void closeValveC() { 
@@ -53,7 +49,6 @@ void openValveD() {
   digitalWrite(RELAY_D_PIN, LOW); 
   Blynk.virtualWrite(V4, 1); 
   Serial.println("🔓 Valve D: Full Open");
-  forceCloseAB();
 }
 
 void closeValveD() { 
