@@ -1,3 +1,4 @@
+DYLAN C02:
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
@@ -193,8 +194,8 @@ void setup() {
 
   Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
   
-  // Synchronize time with NTP server
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  // Synchronize time with NTP server (+8 Offset for Malaysia)
+  configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
   Serial.println("Waiting for NTP time sync: ");
   time_t now = time(nullptr);
   int retries = 0;
