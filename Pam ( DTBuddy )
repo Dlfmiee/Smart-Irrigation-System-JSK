@@ -29,6 +29,7 @@ const int wifiLedPin = 2;  // Built-in WiFi LED
 bool pumpRunning = false;
 bool pumpError = false;
 unsigned long pumpStartTime = 0;
+bool v3_open = false; // Valve C
 bool v4_open = false; // Valve D
 bool v5_open = false; // Valve A
 bool rainLockout = false;
@@ -67,6 +68,7 @@ void stopPump() {
 
 void masterResetAll() {
   stopPump();
+  Blynk.virtualWrite(V3, 0); v3_open = false;
   Blynk.virtualWrite(V4, 0); v4_open = false;
   Blynk.virtualWrite(V5, 0); v5_open = false;
   pumpError = false;
@@ -74,8 +76,8 @@ void masterResetAll() {
 }
 
 void evaluatePumpState() {
-  // Only Valve A and Valve D are actually flowing water now
-  bool demand = (v5_open || v4_open);
+  // Now monitors C (V3), D (V4), and A (V5)
+  bool demand = (v3_open || v4_open || v5_open);
 
   // 🚨 PRIORITY 1: SAFETY
   if (rainLockout || pumpError || pumpMode == 2) {
@@ -143,6 +145,7 @@ void logToGoogleSheets() {
 
 // ================== BLYNK ==================
 
+BLYNK_WRITE(V3)  { v3_open = param.asInt(); evaluatePumpState(); }
 BLYNK_WRITE(V4)  { v4_open = param.asInt(); evaluatePumpState(); }
 BLYNK_WRITE(V5)  { v5_open = param.asInt(); evaluatePumpState(); }
 BLYNK_WRITE(V12) { rainLockout = param.asInt(); evaluatePumpState(); }
@@ -150,7 +153,7 @@ BLYNK_WRITE(V0)  { flowE = param.asFloat(); }
 BLYNK_WRITE(V13) { pumpMode = param.asInt(); evaluatePumpState(); }
 
 BLYNK_CONNECTED() {
-  Blynk.syncVirtual(V4, V5, V12, V13);
+  Blynk.syncVirtual(V3, V4, V5, V12, V13);
   Serial.println("✅ Pam Connected");
 }
 

@@ -3,6 +3,7 @@
   V3 = Valve C (Pin 26)
   V4 = Valve D (Pin 27)
   Schedule: 04:00 PM Open, 04:30 PM Close
+  Logic: Active-HIGH (HIGH=OPEN, LOW=CLOSED)
   Stagger: 7 seconds between C and D
 */
 
@@ -26,7 +27,7 @@ const char* pass = "datangsurau";
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
 
 // --- PIN DEFINITIONS ---
-#define RELAY_C_PIN 26
+#define RELAY_C_PIN 32
 #define RELAY_D_PIN 27
 #define WIFI_LED_PIN 2
 
@@ -105,30 +106,32 @@ void fetchGlobalData() {
 // ================== VALVE C ==================
 
 void openValveC() {
-  digitalWrite(RELAY_C_PIN, HIGH);
+  digitalWrite(RELAY_C_PIN, HIGH);       // Active HIGH = OPEN
   Blynk.virtualWrite(VPIN_VALVE_C, 1);
+  shoutToMasterPump(3, 1);                // Tell Pump that Valve C is OPEN
   Serial.println("[C] Valve C OPEN");
 }
 
 void closeValveC() {
-  digitalWrite(RELAY_C_PIN, LOW);
+  digitalWrite(RELAY_C_PIN, LOW);        // Active HIGH = CLOSED
   Blynk.virtualWrite(VPIN_VALVE_C, 0);
+  shoutToMasterPump(3, 0);                // Tell Pump that Valve C is CLOSED
   Serial.println("[C] Valve C CLOSED");
 }
 
 // ================== VALVE D ==================
 
 void openValveD() {
-  digitalWrite(RELAY_D_PIN, HIGH);
+  digitalWrite(RELAY_D_PIN, HIGH);       // Active HIGH = OPEN
   Blynk.virtualWrite(VPIN_VALVE_D, 1);
-  shoutToMasterPump(4, 1); // Tell Pump that Valve D is OPEN
+  shoutToMasterPump(4, 1);                // Tell Pump that Valve D is OPEN
   Serial.println("[D] Valve D OPEN");
 }
 
 void closeValveD() {
-  digitalWrite(RELAY_D_PIN, LOW);
+  digitalWrite(RELAY_D_PIN, LOW);        // Active HIGH = CLOSED
   Blynk.virtualWrite(VPIN_VALVE_D, 0);
-  shoutToMasterPump(4, 0); // Tell Pump that Valve D is CLOSED
+  shoutToMasterPump(4, 0);                // Tell Pump that Valve D is CLOSED
   Serial.println("[D] Valve D CLOSED");
 }
 
@@ -146,7 +149,7 @@ BLYNK_WRITE(VPIN_VALVE_D) {
 
 BLYNK_CONNECTED() {
   Blynk.syncVirtual(VPIN_VALVE_C, VPIN_VALVE_D);
-  Serial.println("✅ Cyberspark Connected (Unique Token)");
+  Serial.println("✅ Cyberspark Connected (Unique Token - Active-HIGH Mode)");
 }
 
 // ================== SCHEDULE ==================
@@ -233,8 +236,9 @@ void setup() {
   pinMode(RELAY_D_PIN, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
 
-  digitalWrite(RELAY_C_PIN, HIGH);
-  digitalWrite(RELAY_D_PIN, HIGH);
+  // Safe default: both valves CLOSED (Active-HIGH means LOW is off)
+  digitalWrite(RELAY_C_PIN, LOW);
+  digitalWrite(RELAY_D_PIN, LOW);
   digitalWrite(WIFI_LED_PIN, LOW);
 
   WiFi.begin(ssid, pass);
@@ -251,7 +255,7 @@ void setup() {
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(60000L, checkSchedule);
 
-  Serial.println("🚀 Cyberspark Independent Mode - Valve C/D Ready");
+  Serial.println("🚀 Cyberspark Independent Mode - Logic & Safety Corrected");
 }
 
 void loop() {
