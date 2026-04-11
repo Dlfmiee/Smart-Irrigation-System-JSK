@@ -1,9 +1,8 @@
 /*
- Valve AB Controller (ALTF4) - UPDATED
- Logic: 3-Wire Motorized Valve (Valve A ONLY)
- Pins: 25 (Open), 26 (Close)
- Schedule: 08:00 AM - 08:30 AM
- Token: Shared (MbA2y5hl...)
+ Valve AB Controller (ALTF4)
+ V5 = Valve A (Pin 25) - Independent
+ V6 = Valve B (Pin 26) - Independent
+ Schedule: 08:00 AM Open, 08:30 AM Close
 */
 
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
@@ -16,93 +15,79 @@
 #include <time.h>
 #include <esp_task_wdt.h>
 
-// WiFi Configuration
+// WiFi
 const char* ssid = "Fmz";
 const char* pass = "iiiiiiii";
-const char* POSIX_TZ = "MYT-8"; 
 
 // --- PIN DEFINITIONS ---
-const int RELAY_OPEN_PIN = 25;   // Relay for Open (Inlet)
-const int RELAY_CLOSE_PIN = 26;  // Relay for Close (Inlet)
-const int FLOW_SENSOR_PIN = 4;   // Flow Sensor Input
-const int WIFI_LED_PIN = 2;      // Status LED
+#define RELAY_A_PIN 25   // Valve A
+#define RELAY_B_PIN 27   // Valve B
+#define WIFI_LED_PIN 2   // Built-in Status LED
 
 // --- VIRTUAL PINS ---
-#define VPIN_VALVE_A V5           // Main Valve Switch (Active on dashboard)
-#define VPIN_FLOW_RATE V1         // Display pulses
-#define VPIN_FLOW_STATUS V2       // Flow LED
-#define VPIN_SYSTEM_STATUS V7     // Status Text
+#define VPIN_VALVE_A V5
+#define VPIN_VALVE_B V6
 
 // --- VARIABLES ---
 BlynkTimer timer;
-volatile unsigned long pulseCount = 0;
-unsigned long lastPulseCount = 0;
-bool flowDetected = false;
-bool valveA_Open = false;
-int lastOpenDay = -1;
+int lastOpenDay  = -1;
 int lastCloseDay = -1;
 
-void IRAM_ATTR pulseCounter() {
-  pulseCount++;
+// ================== FORCE CLOSE ==================
+void forceCloseCD() {
+  Blynk.virtualWrite(V3, 0);
+  Blynk.virtualWrite(V4, 0);
 }
 
-// ================== VALVE ACTIONS ==================
-
-void stopValve() {
-  digitalWrite(RELAY_OPEN_PIN, HIGH); // Relays OFF (Active Low)
-  digitalWrite(RELAY_CLOSE_PIN, HIGH);
-  Serial.println("Motor: STOP");
-}
+// ================== VALVE A ==================
 
 void openValveA() {
-  digitalWrite(RELAY_CLOSE_PIN, HIGH); // Ensure Close is OFF
-  delay(100);
-  digitalWrite(RELAY_OPEN_PIN, LOW); // Trigger OPEN
-  valveA_Open = true;
+  digitalWrite(RELAY_A_PIN, LOW);        // Active LOW = energize
   Blynk.virtualWrite(VPIN_VALVE_A, 1);
-  Serial.println("Action: OPEN Valve A (3-Wire)");
+  Serial.println("[A] Valve A OPEN");
+  forceCloseCD();
 }
 
 void closeValveA() {
-  digitalWrite(RELAY_OPEN_PIN, HIGH); // Ensure Open is OFF
-  delay(100);
-  digitalWrite(RELAY_CLOSE_PIN, LOW); // Trigger CLOSE
-  valveA_Open = false;
+  digitalWrite(RELAY_A_PIN, HIGH);       // De-energize
   Blynk.virtualWrite(VPIN_VALVE_A, 0);
-  Serial.println("Action: CLOSE Valve A (3-Wire)");
+  Serial.println("[A] Valve A CLOSED");
 }
 
-// ================== HANDLERS ==================
+// ================== VALVE B ==================
+
+void openValveB() {
+  digitalWrite(RELAY_B_PIN, LOW);        // Active LOW = energize
+  Blynk.virtualWrite(VPIN_VALVE_B, 1);
+  Serial.println("[B] Valve B OPEN");
+  forceCloseCD();
+}
+
+void closeValveB() {
+  digitalWrite(RELAY_B_PIN, HIGH);       // De-energize
+  Blynk.virtualWrite(VPIN_VALVE_B, 0);
+  Serial.println("[B] Valve B CLOSED");
+}
+
+// ================== BLYNK HANDLERS ==================
 
 BLYNK_WRITE(VPIN_VALVE_A) {
-  if (param.asInt()) openValveA();
-  else closeValveA();
+  if (param.asInt() == 1) openValveA();
+  else                    closeValveA();
+}
+
+BLYNK_WRITE(VPIN_VALVE_B) {
+  if (param.asInt() == 1) openValveB();
+  else                    closeValveB();
 }
 
 BLYNK_CONNECTED() {
-  Blynk.syncVirtual(VPIN_VALVE_A);
-  Serial.println("✅ ALTF4 Connected to Blynk");
+  // Sync both valve states on reconnect
+  Blynk.syncVirtual(VPIN_VALVE_A, VPIN_VALVE_B);
+  Serial.println("✅ ALTF4 Connected");
 }
 
-// ================== LOGIC ==================
-
-void checkWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH);
-  } else {
-    digitalWrite(WIFI_LED_PIN, LOW);
-    WiFi.begin(ssid, pass);
-  }
-}
-
-void checkFlow() {
-  unsigned long pulses = pulseCount;
-  unsigned long pulsesInWindow = pulses - lastPulseCount;
-  lastPulseCount = pulses;
-  flowDetected = (pulsesInWindow > 0);
-  Blynk.virtualWrite(VPIN_FLOW_RATE, pulsesInWindow);
-  Blynk.virtualWrite(VPIN_FLOW_STATUS, flowDetected ? 1 : 0);
-}
+// ================== SCHEDULE ==================
 
 void checkSchedule() {
   struct tm timeinfo;
@@ -112,51 +97,64 @@ void checkSchedule() {
   int minute = timeinfo.tm_min;
   int day = timeinfo.tm_mday;
 
-  // 08:00 AM - START
+  // 08:00 AM - Open both valves
   if (hour == 8 && minute == 0 && lastOpenDay != day) {
+    Serial.println("⏰ Schedule: 08:00 - Opening A & B");
     openValveA();
+    openValveB();
     lastOpenDay = day;
   }
 
-  // 08:30 AM - STOP
+  // 08:30 AM - Close both valves
   if (hour == 8 && minute == 30 && lastCloseDay != day) {
+    Serial.println("⏰ Schedule: 08:30 - Closing A & B");
     closeValveA();
+    closeValveB();
     lastCloseDay = day;
   }
 }
 
+// ================== WIFI CHECK ==================
+
+void checkWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, HIGH);
+  } else {
+    digitalWrite(WIFI_LED_PIN, LOW);
+    WiFi.begin(ssid, pass);
+    Serial.println("[WiFi] Reconnecting...");
+  }
+}
+
+// ================== SETUP ==================
+
 void setup() {
   Serial.begin(115200);
-  
-  pinMode(RELAY_OPEN_PIN, OUTPUT);
-  pinMode(RELAY_CLOSE_PIN, OUTPUT);
+
+  pinMode(RELAY_A_PIN, OUTPUT);
+  pinMode(RELAY_B_PIN, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
-  pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
-  
-  // Default: OFF
-  digitalWrite(RELAY_OPEN_PIN, HIGH);
-  digitalWrite(RELAY_CLOSE_PIN, HIGH);
+
+  // Safe default: both valves CLOSED
+  digitalWrite(RELAY_A_PIN, HIGH);
+  digitalWrite(RELAY_B_PIN, HIGH);
   digitalWrite(WIFI_LED_PIN, LOW);
 
-  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, FALLING);
-
-  // Connection
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
 
-  // Watchdog
+  // Watchdog 30s
   esp_task_wdt_config_t twdt_config = {
     .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
   };
   esp_task_wdt_init(&twdt_config);
   esp_task_wdt_add(NULL);
 
-  timer.setInterval(2000L, checkFlow);
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(60000L, checkSchedule);
-  
-  Serial.println("🚀 ALTF4 READY (3-Wire Valve A)");
+
+  Serial.println("🚀 ALTF4 Ready - Valve A (V5/Pin25) | Valve B (V6/Pin26)");
 }
 
 void loop() {

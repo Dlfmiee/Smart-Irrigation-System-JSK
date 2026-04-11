@@ -1,9 +1,8 @@
 /*
- Valve CD Controller (Cyberspark) - UPDATED
- Logic: 3-Wire Motorized Valve (Valve D ONLY)
- Pins: 26 (Open), 27 (Close)
- Schedule: 04:00 PM - 04:30 PM
- Token: Shared (MbA2y5hl...)
+ Valve CD Controller (Cyberspark)
+ V3 = Valve C (Pin 26) - Independent
+ V4 = Valve D (Pin 27) - Independent
+ Schedule: 04:00 PM Open, 04:30 PM Close
 */
 
 #define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
@@ -16,65 +15,104 @@
 #include <time.h>
 #include <esp_task_wdt.h>
 
-// WiFi Configuration
+// WiFi
 const char* ssid = "Fmz";
 const char* pass = "iiiiiiii";
-const char* POSIX_TZ = "MYT-8"; 
 
 // --- PIN DEFINITIONS ---
-const int RELAY_OPEN_PIN = 26;   // Relay for Open
-const int RELAY_CLOSE_PIN = 27;  // Relay for Close
-const int WIFI_LED_PIN = 2;      // Status LED
+#define RELAY_C_PIN 26   // Valve C
+#define RELAY_D_PIN 27   // Valve D
+#define WIFI_LED_PIN 2   // Built-in Status LED
 
 // --- VIRTUAL PINS ---
-#define VPIN_VALVE_D V4           // Main Valve Switch for D
-#define VPIN_SYSTEM_STATUS V7     // Status Text
+#define VPIN_VALVE_C V3
+#define VPIN_VALVE_D V4
 
 // --- VARIABLES ---
 BlynkTimer timer;
-bool valveD_Open = false;
-int lastOpenHour = -1;
+int lastOpenHour  = -1;
 int lastCloseHour = -1;
 
-// ================== VALVE ACTIONS ==================
-
-void stopValve() {
-  digitalWrite(RELAY_OPEN_PIN, HIGH); // Relays OFF (Active Low)
-  digitalWrite(RELAY_CLOSE_PIN, HIGH);
-  Serial.println("Motor: STOP");
+// ================== FORCE CLOSE ==================
+void forceCloseAB() {
+  Blynk.virtualWrite(V5, 0);
+  Blynk.virtualWrite(V6, 0);
 }
 
+// ================== VALVE C ==================
+
+void openValveC() {
+  digitalWrite(RELAY_C_PIN, LOW);
+  Blynk.virtualWrite(VPIN_VALVE_C, 1);
+  Serial.println("[C] Valve C OPEN");
+  forceCloseAB();
+}
+
+void closeValveC() {
+  digitalWrite(RELAY_C_PIN, HIGH);
+  Blynk.virtualWrite(VPIN_VALVE_C, 0);
+  Serial.println("[C] Valve C CLOSED");
+}
+
+// ================== VALVE D ==================
+
 void openValveD() {
-  digitalWrite(RELAY_CLOSE_PIN, HIGH); // Ensure Close is OFF
-  delay(100);
-  digitalWrite(RELAY_OPEN_PIN, LOW); // Trigger OPEN
-  valveD_Open = true;
+  digitalWrite(RELAY_D_PIN, LOW);
   Blynk.virtualWrite(VPIN_VALVE_D, 1);
-  Serial.println("Action: OPEN Valve D (3-Wire)");
+  Serial.println("[D] Valve D OPEN");
+  forceCloseAB();
 }
 
 void closeValveD() {
-  digitalWrite(RELAY_OPEN_PIN, HIGH); // Ensure Open is OFF
-  delay(100);
-  digitalWrite(RELAY_CLOSE_PIN, LOW); // Trigger CLOSE
-  valveD_Open = false;
+  digitalWrite(RELAY_D_PIN, HIGH);
   Blynk.virtualWrite(VPIN_VALVE_D, 0);
-  Serial.println("Action: CLOSE Valve D (3-Wire)");
+  Serial.println("[D] Valve D CLOSED");
 }
 
-// ================== HANDLERS ==================
+// ================== BLYNK HANDLERS ==================
+
+BLYNK_WRITE(VPIN_VALVE_C) {
+  if (param.asInt() == 1) openValveC();
+  else                    closeValveC();
+}
 
 BLYNK_WRITE(VPIN_VALVE_D) {
-  if (param.asInt()) openValveD();
-  else closeValveD();
+  if (param.asInt() == 1) openValveD();
+  else                    closeValveD();
 }
 
 BLYNK_CONNECTED() {
-  Blynk.syncVirtual(VPIN_VALVE_D);
-  Serial.println("✅ Cyberspark Connected to Blynk");
+  Blynk.syncVirtual(VPIN_VALVE_C, VPIN_VALVE_D);
+  Serial.println("✅ Cyberspark Connected");
 }
 
-// ================== LOGIC ==================
+// ================== SCHEDULE ==================
+
+void checkSchedule() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) return;
+
+  int hour   = timeinfo.tm_hour;
+  int minute = timeinfo.tm_min;
+
+  // 04:00 PM - Open both valves
+  if (hour == 16 && minute == 0 && lastOpenHour != hour) {
+    Serial.println("⏰ Schedule: 16:00 - Opening C & D");
+    openValveC();
+    openValveD();
+    lastOpenHour = hour;
+  }
+
+  // 04:30 PM - Close both valves
+  if (hour == 16 && minute == 30 && lastCloseHour != hour) {
+    Serial.println("⏰ Schedule: 16:30 - Closing C & D");
+    closeValveC();
+    closeValveD();
+    lastCloseHour = hour;
+  }
+}
+
+// ================== WIFI CHECK ==================
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
@@ -82,48 +120,29 @@ void checkWiFi() {
   } else {
     digitalWrite(WIFI_LED_PIN, LOW);
     WiFi.begin(ssid, pass);
+    Serial.println("[WiFi] Reconnecting...");
   }
 }
 
-void checkSchedule() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return;
-
-  int hour = timeinfo.tm_hour;
-  int minute = timeinfo.tm_min;
-  int day = timeinfo.tm_mday;
-
-  // 04:00 PM (16:00) - START
-  if (hour == 16 && minute == 0 && lastOpenHour != hour) {
-    openValveD();
-    lastOpenHour = hour;
-  }
-
-  // 04:30 PM (16:30) - STOP
-  if (hour == 16 && minute == 30 && lastCloseHour != hour) {
-    closeValveD();
-    lastCloseHour = hour;
-  }
-}
+// ================== SETUP ==================
 
 void setup() {
   Serial.begin(115200);
-  
-  pinMode(RELAY_OPEN_PIN, OUTPUT);
-  pinMode(RELAY_CLOSE_PIN, OUTPUT);
+
+  pinMode(RELAY_C_PIN, OUTPUT);
+  pinMode(RELAY_D_PIN, OUTPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
-  
-  // Default: OFF
-  digitalWrite(RELAY_OPEN_PIN, HIGH);
-  digitalWrite(RELAY_CLOSE_PIN, HIGH);
+
+  // Safe default: both valves CLOSED
+  digitalWrite(RELAY_C_PIN, HIGH);
+  digitalWrite(RELAY_D_PIN, HIGH);
   digitalWrite(WIFI_LED_PIN, LOW);
 
-  // Connection
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
 
-  // Watchdog
+  // Watchdog 30s
   esp_task_wdt_config_t twdt_config = {
     .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
   };
@@ -132,8 +151,8 @@ void setup() {
 
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(60000L, checkSchedule);
-  
-  Serial.println("🚀 Cyberspark READY (3-Wire Valve D)");
+
+  Serial.println("🚀 Cyberspark Ready - Valve C (V3/Pin26) | Valve D (V4/Pin27)");
 }
 
 void loop() {
