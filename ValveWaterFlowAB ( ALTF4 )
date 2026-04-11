@@ -27,7 +27,7 @@ const char* pass = "datangsurau";
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
 
 // --- PIN DEFINITIONS ---
-#define RELAY_A_PIN 26   // Valve A
+#define RELAY_A_PIN 14   // Valve A
 #define RELAY_B_PIN 27   // Valve B
 #define WIFI_LED_PIN 2   // Built-in Status LED
 

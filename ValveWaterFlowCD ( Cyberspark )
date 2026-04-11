@@ -27,7 +27,7 @@ const char* pass = "datangsurau";
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
 
 // --- PIN DEFINITIONS ---
-#define RELAY_C_PIN 32
+#define RELAY_C_PIN 14
 #define RELAY_D_PIN 27
 #define WIFI_LED_PIN 2
 
