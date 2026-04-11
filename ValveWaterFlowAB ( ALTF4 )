@@ -16,8 +16,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "Fmz";
-const char* pass = "iiiiiiii";
+const char* ssid = "SurauAl-Irfan";
+const char* pass = "datangsurau";
 
 // --- PIN DEFINITIONS ---
 #define RELAY_A_PIN 25   // Valve A
@@ -33,11 +33,14 @@ BlynkTimer timer;
 int lastOpenDay  = -1;
 int lastCloseDay = -1;
 
-// ================== FORCE CLOSE ==================
-void forceCloseCD() {
-  Blynk.virtualWrite(V3, 0);
-  Blynk.virtualWrite(V4, 0);
-}
+// Staging Variables (Pre-Check)
+int envMoisture = 0;      // V7
+bool envRain = false;     // V12
+float envFlow = 0;        // V0
+bool envConditionOK = false;
+bool leakDetected = false;
+int lastCheckDay = -1;
+int lastLeakCheckDay = -1;
 
 // ================== VALVE A ==================
 
@@ -45,7 +48,6 @@ void openValveA() {
   digitalWrite(RELAY_A_PIN, LOW);        // Active LOW = energize
   Blynk.virtualWrite(VPIN_VALVE_A, 1);
   Serial.println("[A] Valve A OPEN");
-  forceCloseCD();
 }
 
 void closeValveA() {
@@ -60,7 +62,6 @@ void openValveB() {
   digitalWrite(RELAY_B_PIN, LOW);        // Active LOW = energize
   Blynk.virtualWrite(VPIN_VALVE_B, 1);
   Serial.println("[B] Valve B OPEN");
-  forceCloseCD();
 }
 
 void closeValveB() {
@@ -81,6 +82,11 @@ BLYNK_WRITE(VPIN_VALVE_B) {
   else                    closeValveB();
 }
 
+// Environment Sync Handlers
+BLYNK_WRITE(V7) { envMoisture = param.asInt(); }
+BLYNK_WRITE(V12){ envRain = param.asInt(); }
+BLYNK_WRITE(V0) { envFlow = param.asFloat(); }
+
 BLYNK_CONNECTED() {
   // Sync both valve states on reconnect
   Blynk.syncVirtual(VPIN_VALVE_A, VPIN_VALVE_B);
@@ -95,21 +101,65 @@ void checkSchedule() {
 
   int hour = timeinfo.tm_hour;
   int minute = timeinfo.tm_min;
+  int second = timeinfo.tm_sec; // For fine-grained pre-check
   int day = timeinfo.tm_mday;
 
-  // 08:00 AM - Open both valves
-  if (hour == 8 && minute == 0 && lastOpenDay != day) {
-    Serial.println("⏰ Schedule: 08:00 - Opening A & B");
-    openValveA();
-    openValveB();
-    lastOpenDay = day;
+  // 1. T-30 Mins (07:30): Sync Moisture and Rain
+  if (hour == 7 && minute == 30 && lastCheckDay != day) {
+    Serial.println("📢 T-30 [ALTF4]: Syncing Moisture/Rain Data...");
+    Blynk.syncVirtual(V7, V12);
+    lastCheckDay = day;
+    // Allow a few seconds for sync to return, then analyze
+    timer.setTimeout(5000L, [](){
+      if (envRain) {
+        envConditionOK = false;
+        Serial.println("⚠️ Pre-check FAIL: Rain Lockout active.");
+      } else if (envMoisture >= 80) {
+        envConditionOK = false;
+        Serial.println("⚠️ Pre-check FAIL: Soil is too wet.");
+      } else {
+        envConditionOK = true;
+        Serial.println("✅ Pre-check PASS: Conditions OK.");
+      }
+    });
   }
 
-  // 08:30 AM - Close both valves
+  // 2. T-30 Secs (07:59): Sync Flow for Leak Check
+  // Note: checkSchedule runs every 60s, so we check for minute 59
+  if (hour == 7 && minute == 59 && lastLeakCheckDay != day) {
+    Serial.println("📢 T-30s [ALTF4]: Syncing Flow for Leak Check...");
+    Blynk.syncVirtual(V0);
+    lastLeakCheckDay = day;
+    timer.setTimeout(2000L, [](){
+      if (envFlow > 0.05) { // Small threshold for noise
+        leakDetected = true;
+        Serial.println("🚨 Leak Check FAIL: Flow detected before opening!");
+      } else {
+        leakDetected = false;
+        Serial.println("✅ Leak Check PASS: No flow detected.");
+      }
+    });
+  }
+
+  // 3. 08:00 AM - Process Execution
+  if (hour == 8 && minute == 0 && lastOpenDay != day) {
+    lastOpenDay = day;
+    if (envConditionOK && !leakDetected) {
+      Serial.println("⏰ Schedule: 08:00 - STARTING (Staggered)");
+      openValveA();
+      timer.setTimeout(7000L, openValveB);
+    } else {
+      String reason = leakDetected ? "LEAK" : (envRain ? "RAIN" : "WET SOIL");
+      Serial.print("🚫 Schedule: 08:00 - SKIPPED. Reason: ");
+      Serial.println(reason);
+    }
+  }
+
+  // 4. 08:30 AM - Close staggered (Always runs if opened)
   if (hour == 8 && minute == 30 && lastCloseDay != day) {
-    Serial.println("⏰ Schedule: 08:30 - Closing A & B");
+    Serial.println("⏰ Schedule: 08:30 - Closing Valve A (B follows in 7s)");
     closeValveA();
-    closeValveB();
+    timer.setTimeout(7000L, closeValveB);
     lastCloseDay = day;
   }
 }
@@ -154,7 +204,7 @@ void setup() {
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(60000L, checkSchedule);
 
-  Serial.println("🚀 ALTF4 Ready - Valve A (V5/Pin25) | Valve B (V6/Pin26)");
+  Serial.println("🚀 ALTF4 Ready - Valve A (V5/Pin25) | Valve B (V6/Pin27)");
 }
 
 void loop() {

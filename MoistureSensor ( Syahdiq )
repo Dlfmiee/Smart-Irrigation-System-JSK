@@ -12,8 +12,8 @@ const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFV
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; // DTBuddy
 
 /************ WIFI ************/
-char ssid[] = "Fmz";
-char pass[] = "iiiiiiii";
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
 
 // Soil sensor pins
 #define SOIL1 34

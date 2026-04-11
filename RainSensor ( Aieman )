@@ -11,8 +11,8 @@
 #include <esp_task_wdt.h>
 
 // ================== CONFIG ==================
-const char* ssid = "Fmz";
-const char* pass = "iiiiiiii";
+const char* ssid = "SurauAl-Irfan";
+const char* pass = "datangsurau";
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbwzJIqpURcO6Ah2oZw5DyZ0Uc2ulbUP-NrUtwOI3aUsIXFZp4cDkWxVI74yoys2LSJL/exec";
 const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"; // DTBuddy
 

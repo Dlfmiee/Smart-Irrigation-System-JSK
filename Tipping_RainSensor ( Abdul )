@@ -11,14 +11,14 @@
 #include <esp_task_wdt.h>
 
 // ================== WIFI ==================
-char ssid[] = "Fmz";
-char pass[] = "iiiiiiii";
+char ssid[] = "SurauAl-Irfan";
+char pass[] = "datangsurau";
 
 // ================== GOOGLE SHEETS ==================
-const char* googleScriptUrl = "YOUR_GOOGLE_SCRIPT_URL";
+const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 // ================== BRIDGE ==================
-const char* MASTER_PUMP_TOKEN = "PUMP_DEVICE_TOKEN";
+const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
 
 // ================== PIN ==================
 #define REED_PIN 27
