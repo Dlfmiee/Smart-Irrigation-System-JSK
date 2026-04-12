@@ -103,6 +103,8 @@ void checkWiFi() {
   }
 }
 
+bool wdtActive = false;
+
 void checkSchedule() {
   time_t now = time(nullptr);
   struct tm* timeinfo = localtime(&now);
@@ -117,7 +119,6 @@ void checkSchedule() {
   bool inAfternoonWindow = (hour == 15 && minute >= 27) || (hour == 16 && minute <= 35);
   bool inWindow = inMorningWindow || inAfternoonWindow;
 
-  static bool wdtActive = false;
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
@@ -193,7 +194,7 @@ void setup() {
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset(); 
+  if (wdtActive) esp_task_wdt_reset(); 
 
   // Real-time LED feedback: Turn ON if pulse was detected in the last 1.5 seconds
   static bool currentLedState = false;

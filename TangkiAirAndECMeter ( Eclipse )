@@ -92,6 +92,8 @@ void sendDailyReport() {
   http.end();
 }
 
+bool wdtActive = false;
+
 void checkDailySchedule() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
@@ -104,7 +106,6 @@ void checkDailySchedule() {
   bool inWindow = ( (timeinfo.tm_hour == 6 && timeinfo.tm_min >= 57) || 
                     (timeinfo.tm_hour == 7 && timeinfo.tm_min <= 5) );
 
-  static bool wdtActive = false;
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
@@ -200,5 +201,5 @@ void setup() {
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset();
+  if (wdtActive) esp_task_wdt_reset();
 }

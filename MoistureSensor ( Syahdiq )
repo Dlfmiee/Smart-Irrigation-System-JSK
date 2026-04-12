@@ -102,6 +102,8 @@ void monitorSensors() {
   Serial.println("%");
 }
 
+bool wdtActive = false;
+
 /************ SCHEDULED BLYNK PUBLISH ************/
 void scheduledBlynkPublish() {
   time_t now = time(nullptr);
@@ -114,7 +116,6 @@ void scheduledBlynkPublish() {
   bool inWindow = ( (hour == 7 && minute >= 28 && minute <= 35) || 
                     (hour == 15 && minute >= 28 && minute <= 35) );
 
-  static bool wdtActive = false;
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
@@ -266,5 +267,7 @@ void setup() {
 void loop() {
   Blynk.run();
   timer.run();
-  esp_task_wdt_reset();
+  if (wdtActive) {
+    esp_task_wdt_reset();
+  }
 }

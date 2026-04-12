@@ -84,6 +84,8 @@ void masterResetAll() {
   Serial.println("[MASTER] System Reset");
 }
 
+bool wdtActive = false;
+
 void evaluatePumpState() {
   // Update indicator only on change to save Blynk messages
   if (pumpRunning != lastPumpRunning) {
@@ -114,7 +116,6 @@ void evaluatePumpState() {
   }
 
   // --- DYNAMIC WATCHDOG LOGIC ---
-  static bool wdtActive = false;
   if (pumpRunning && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
@@ -292,5 +293,5 @@ void loop() {
     Blynk.connect();
   }
   timer.run();
-  esp_task_wdt_reset();
+  if (wdtActive) esp_task_wdt_reset();
 }

@@ -153,6 +153,8 @@ BLYNK_CONNECTED() {
 
 // ================== SCHEDULE ==================
 
+bool wdtActive = false;
+
 void checkSchedule() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) return;
@@ -165,7 +167,6 @@ void checkSchedule() {
   bool inWindow = ( (hour == 7 && minute >= 57) || 
                     (hour == 8 && minute <= 33) );
   
-  static bool wdtActive = false;
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
@@ -305,5 +306,5 @@ void loop() {
     Blynk.connect();
   }
   timer.run();
-  esp_task_wdt_reset();
+  if (wdtActive) esp_task_wdt_reset();
 }

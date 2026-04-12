@@ -69,6 +69,8 @@ void logToGoogleSheets() {
 }
 
 // ================== SCHEDULED TRANSMISSION ==================
+bool wdtActive = false;
+
 void checkScheduledPublish() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) return;
@@ -81,7 +83,6 @@ void checkScheduledPublish() {
   bool inWindow = ( (hour == 7 && minute >= 27 && minute <= 33) || 
                     (hour == 15 && minute >= 27 && minute <= 33) );
 
-  static bool wdtActive = false;
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
@@ -178,5 +179,5 @@ void setup() {
 void loop() {
   if (Blynk.connected()) Blynk.run();
   timer.run();
-  esp_task_wdt_reset();
+  if (wdtActive) esp_task_wdt_reset();
 }
