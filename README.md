@@ -8,8 +8,8 @@ The system is built on a **distributed "Safety First" architecture**. Unlike tra
 ### 🛰️ The 8 Operation Nodes:
 1.  **DT Buddy (Pam)**: The Master Pump Controller (Manual Override + 30m Safety Cap).
 2.  **Aieman (Rain Sensor)**: High-speed storm detection (5s timing).
-3.  **Syahdiq (Moisture Sensor)**: Multi-point soil humidity monitoring (0–100% scale).
-4.  **Abdul (Tipping Bucket)**: Accumulative daily rainfall measurement (mm).
+3.  **Syahdiq (Moisture Sensor)**: Multi-point soil humidity monitoring (0–100% scale), reporting strictly twice daily.
+4.  **Abdul (Tipping Bucket)**: Accumulative daily rainfall measurement (mm), synchronized reporting at 07:30 AM & 03:30 PM.
 5.  **Flexxy (Waterflow E)**: Real-time flow monitoring and Dry-Run protection.
 6.  **Eclipse (Tank & EC)**: Nutrient level (mS/cm) and high-precision float monitoring.
 7.  **Cyberspark (Valve C/D)**: Water inlet/outlet management (4 PM Session).
@@ -25,17 +25,21 @@ The system runs two primary automated sessions per day:
 
 ---
 
+## 💡 LED Standardization
+*   **Global Connection Indicator**: Every node uses its Built-in Blue LED (GPIO 2) to signify active Wi-Fi and Blynk connection.
+*   **Hardware Action Indicator**: External LEDs are strictly reserved for physical hardware actions (Valves, Pumps, Sensing execution).
+
 ## 🛡️ Integrated Safety Logic
 *   **Global Rain Lockout (V12)**: Sensing nodes (Aieman, Syahdiq, Abdul) use the **Blynk REST API Bridge** to instantly signal a system-wide lockout if a hazard (rain/saturated soil) is detected.
 *   **Dry-Run Protection**: The Pump (`DTBuddy`) monitors the flow rate from `Flexxy`. If no water is detected 15 seconds after starting, the pump immediately shuts down to protect the hardware.
 *   **3-State Master Switch (V13)**: Gives the owner total control between **AUTO**, **FORCE ON**, and **FORCE OFF** modes.
-*   **Hardware Watchdog**: All nodes feature a 30-second self-reboot timer if the code hangs.
+*   **Hardware Watchdog**: All nodes feature an AI-optimized active-window watchdog that arms only during irrigation and reporting periods, preventing idle resets and API spamming.
 
 ---
 
 ## ⚙️ Configuration
-*   **WIFI SSID**: `Fmz`
-*   **WIFI Pass**: `iiiiiiii`
+*   **WIFI SSID**: `WiFi JSK`
+*   **WIFI Pass**: `vhwau35565`
 *   **Timezone**: GMT+8 (Malaysia)
 *   **Time Sync**: Automatically synchronized via NTP.
 

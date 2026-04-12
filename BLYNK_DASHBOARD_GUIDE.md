@@ -68,9 +68,11 @@ For a stunning, high-end look, use the following widget settings in the **Blynk 
 *   **Gauge (V7)**: Name: "SOIL MOISTURE".
     *   *Unit*: **%**.
     *   *Gradient*: Red (0%) -> Yellow (50%) -> Blue (100%).
+    *   *Note*: Transmits data only during designated scheduled phases.
 *   **Labeled Value (V8)**: Name: "DAILY RAINFALL".
     *   *Unit*: **mm**.
     *   *Icon*: "Cloud" or "Droplet".
+    *   *Note*: Transmits synchronized data specifically at 07:30 AM and 03:30 PM.
 *   **Gauge (V2)**: Name: "NUTRIENT LEVEL (EC)".
     *   *Unit*: **mS/cm** (Type this in manually).
     *   *Color*: **Gold (#FFD60A)**.

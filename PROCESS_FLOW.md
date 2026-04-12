@@ -22,7 +22,8 @@ graph TD
     end
 
     subgraph Observation_Layer
-      D & E & F & A & B & C -->|Every 5 Min| G[Google Sheets]
+      D & E & F & A -->|Periodic| G[Google Sheets]
+      B & C -->|Scheduled (7:30AM/3:30PM)| G
     end
 ```
 
@@ -55,7 +56,7 @@ Safety is the #1 priority to prevent hardware damage.
 | **Rain Lockout (V12)** | Triggered by Aieman (Rain), Abdul (mm), or Syahdiq (Wet Soil). | All scheduled cycles are **Cancelled**. |
 | **Dry-Run Protection** | Pump (Node: DTBuddy) checks Flow E (Node: Flexxy) after 15s. | If Flow < 0.1 L/min, **Emergency Shutdown** of Pump & Valves. |
 | **30-Minute Cap** | Every cycle is limited to 30 minutes (1,800,000ms) maximum. | Prevents water waste if a sensor fails and ensures proper session duration. |
-| **Hardware Watchdog** | All nodes monitor their own loop status. | Automatic **Self-Reboot** within 30s if code freezes. |
+| **Hardware Watchdog** | AI-optimized windowed monitoring. | Security is **Armed** only during irrigation/reporting windows with a **5-Minute** timeout to prevent message spam during idle times. |
 
 ---
 
@@ -78,7 +79,7 @@ Your 7-day observation data follows this path:
 1. **Step 1 (Physical)**: Sensor reads data (e.g., Moisture = 45%).
 2. **Step 2 (Local)**: ESP32 checks if the change is significant (**Delta Check**).
 3. **Step 3 (Blynk)**: Value sent to Blynk App for live viewing (60s interval).
-4. **Step 4 (Bridge)**: Every 5 minutes, each node makes an HTTPS GET request to **Google Apps Script**.
+4. **Step 4 (Transmission)**: Data is transmitted via HTTPS GET to **Google Apps Script** (Continuous nodes send periodic updates; Sensing nodes like Abdul & Syahdiq are synchronized to twice-daily scheduled updates to avoid API spam).
 5. **Step 5 (Merging)**: The script waits for all 8 nodes and merges them into **ONE consolidated row** in Google Sheets.
 
 ---

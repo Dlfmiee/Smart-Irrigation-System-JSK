@@ -134,7 +134,12 @@ void logToGoogleSheets() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  String url = String(googleScriptUrl) + "?pump=" + String(pumpRunning);
+  String url = String(googleScriptUrl) 
+             + "?pump=" + String(pumpRunning)
+             + "&valveA=" + (v5_open ? "1" : "0")
+             + "&valveB=" + (v6_open ? "1" : "0")
+             + "&valveC=" + (v3_open ? "1" : "0")
+             + "&valveD=" + (v4_open ? "1" : "0");
   
   Serial.print("[LOG] Sheets Syncing Status... ");
   http.begin(client, url);
