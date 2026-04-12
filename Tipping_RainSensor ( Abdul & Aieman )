@@ -76,6 +76,22 @@ void checkScheduledPublish() {
   int hour = timeinfo.tm_hour;
   int minute = timeinfo.tm_min;
 
+  // --- WINDOWED WATCHDOG LOGIC ---
+  // Window: 07:27 to 07:33 and 15:27 to 15:33
+  bool inWindow = ( (hour == 7 && minute >= 27 && minute <= 33) || 
+                    (hour == 15 && minute >= 27 && minute <= 33) );
+
+  static bool wdtActive = false;
+  if (inWindow && !wdtActive) {
+    esp_task_wdt_add(NULL);
+    wdtActive = true;
+    Serial.println("🛡️ [WATCHDOG] Armed for Sync Window.");
+  } else if (!inWindow && wdtActive) {
+    esp_task_wdt_delete(NULL);
+    wdtActive = false;
+    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+  }
+
   // Sync at 07:30 AM or 15:30 PM (3:30 PM)
   if (((hour == 7 && minute == 30) || (hour == 15 && minute == 30)) && hour != lastPublishHour) {
     lastPublishHour = hour;
@@ -146,10 +162,10 @@ void setup() {
   configTime(28800, 0, "pool.ntp.org");
 
   esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
+    .timeout_ms = 300000, .idle_core_mask = 0, .trigger_panic = true
   };
-  esp_task_wdt_init(&wdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_reconfigure(&wdt_config);
+  // esp_task_wdt_add(NULL); -> Moved to dynamic window in checkScheduledPublish()
 
   attachInterrupt(digitalPinToInterrupt(REED_PIN), handleTip, FALLING);
 

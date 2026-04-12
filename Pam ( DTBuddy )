@@ -112,6 +112,18 @@ void evaluatePumpState() {
   } else {
     if (pumpRunning) stopPump();
   }
+
+  // --- DYNAMIC WATCHDOG LOGIC ---
+  static bool wdtActive = false;
+  if (pumpRunning && !wdtActive) {
+    esp_task_wdt_add(NULL);
+    wdtActive = true;
+    Serial.println("🛡️ [WATCHDOG] Armed during Pump Operation.");
+  } else if (!pumpRunning && wdtActive) {
+    esp_task_wdt_delete(NULL);
+    wdtActive = false;
+    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+  }
 }
 
 // ================== LOGGING & SYNC ==================
@@ -258,14 +270,14 @@ void setup() {
     Blynk.connect();
   }
 
-  // Watchdog 30s
+  // Watchdog 5m
   esp_task_wdt_config_t twdt_config = {
-    .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
+    .timeout_ms = 300000, .idle_core_mask = 0, .trigger_panic = true
   };
-  esp_task_wdt_init(&twdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_reconfigure(&twdt_config);
+  // esp_task_wdt_add(NULL); -> Moved to dynamic event in evaluatePumpState()
 
-  timer.setInterval(1000L, evaluatePumpState);      // Fast evaluation
+  timer.setInterval(5000L, evaluatePumpState);      // Balanced evaluation (5s)
   timer.setInterval(10000L, checkWiFi);             // WiFi stabilizer
   timer.setInterval(30000L, fetchRemoteValveStatus); // Independent Pulse Sync (30s)
   timer.setInterval(300000L, logToGoogleSheets);   // Google Sheets Log (5m)

@@ -104,6 +104,27 @@ void monitorSensors() {
 
 /************ SCHEDULED BLYNK PUBLISH ************/
 void scheduledBlynkPublish() {
+  time_t now = time(nullptr);
+  struct tm* timeinfo = localtime(&now);
+  int hour = timeinfo->tm_hour;
+  int minute = timeinfo->tm_min;
+
+  // --- WINDOWED WATCHDOG LOGIC ---
+  // Window: 07:28 to 07:35 and 15:28 to 15:35
+  bool inWindow = ( (hour == 7 && minute >= 28 && minute <= 35) || 
+                    (hour == 15 && minute >= 28 && minute <= 35) );
+
+  static bool wdtActive = false;
+  if (inWindow && !wdtActive) {
+    esp_task_wdt_add(NULL);
+    wdtActive = true;
+    Serial.println("🛡️ [WATCHDOG] Armed for Reporting Window.");
+  } else if (!inWindow && wdtActive) {
+    esp_task_wdt_delete(NULL);
+    wdtActive = false;
+    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+  }
+
   if (shouldPublishToBlynk()) {
     Serial.println("[SCHEDULED] Publishing to Blynk at scheduled time...");
     sendMoistureToBlynk();
@@ -191,7 +212,24 @@ void setup() {
   pinMode(SOIL2, INPUT);
   pinMode(SOIL3, INPUT);
 
-  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+  Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
+  WiFi.begin(ssid, pass);
+  
+  // Non-blocking WiFi Wait (Max 10 seconds)
+  int wifiAttempts = 0;
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) {
+    delay(500);
+    Serial.print(".");
+    wifiAttempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi Connected!");
+  } else {
+    Serial.println("\n📶 WiFi connection taking longer... Blynk will retry in background.");
+  }
+
+  Blynk.config(BLYNK_AUTH_TOKEN);
   
   // Synchronize time with NTP server (+8 Offset for Malaysia)
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
@@ -210,13 +248,13 @@ void setup() {
   Serial.println(asctime(timeinfo));
 
   esp_task_wdt_config_t twdt_config = {
-    .timeout_ms = 30000,
+    .timeout_ms = 300000,
     .idle_core_mask = 0,
     .trigger_panic = true,
   };
 
-  esp_task_wdt_init(&twdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_reconfigure(&twdt_config);
+  // esp_task_wdt_add(NULL); -> Moved to dynamic window in scheduledBlynkPublish()
 
   timer.setInterval(5000L, monitorSensors);  // Read and display sensor data every 5 seconds (serial monitor only)
   timer.setInterval(10000L, checkConnections);  // Check WiFi and Blynk connection every 10 seconds

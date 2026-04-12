@@ -160,6 +160,22 @@ void checkSchedule() {
   int hour = timeinfo.tm_hour;
   int minute = timeinfo.tm_min;
 
+  // --- WINDOWED WATCHDOG LOGIC ---
+  // Window: 07:57 (3m before) to 08:33 (3m after)
+  bool inWindow = ( (hour == 7 && minute >= 57) || 
+                    (hour == 8 && minute <= 33) );
+  
+  static bool wdtActive = false;
+  if (inWindow && !wdtActive) {
+    esp_task_wdt_add(NULL);
+    wdtActive = true;
+    Serial.println("🛡️ [WATCHDOG] Armed for Irrigation Window.");
+  } else if (!inWindow && wdtActive) {
+    esp_task_wdt_delete(NULL);
+    wdtActive = false;
+    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+  }
+
   // 1. T-27 Mins (07:33): Fetch Environment Data
   if (hour == 7 && minute == 33 && lastCheckHour != hour) {
     Serial.println("📢 T-30 [ALTF4]: Fetching Sensor Data...");
@@ -269,12 +285,12 @@ void setup() {
 
   configTime(28800, 0, "pool.ntp.org", "time.nist.gov");
 
-  // Watchdog 30s
+  // Watchdog 5m
   esp_task_wdt_config_t twdt_config = {
-    .timeout_ms = 30000, .idle_core_mask = 0, .trigger_panic = true
+    .timeout_ms = 300000, .idle_core_mask = 0, .trigger_panic = true
   };
-  esp_task_wdt_init(&twdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_reconfigure(&twdt_config);
+  // esp_task_wdt_add(NULL); -> Moved to dynamic window in checkSchedule()
 
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(60000L, checkSchedule);

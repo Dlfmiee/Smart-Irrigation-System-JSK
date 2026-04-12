@@ -111,6 +111,23 @@ void checkSchedule() {
   int minute = timeinfo->tm_min;
   int day = timeinfo->tm_yday;
 
+  // --- WINDOWED WATCHDOG LOGIC ---
+  // Window: 07:27 to 08:35 AND 15:27 to 16:35
+  bool inMorningWindow = (hour == 7 && minute >= 27) || (hour == 8 && minute <= 35);
+  bool inAfternoonWindow = (hour == 15 && minute >= 27) || (hour == 16 && minute <= 35);
+  bool inWindow = inMorningWindow || inAfternoonWindow;
+
+  static bool wdtActive = false;
+  if (inWindow && !wdtActive) {
+    esp_task_wdt_add(NULL);
+    wdtActive = true;
+    Serial.println("🛡️ [WATCHDOG] Armed for Irrigation Window.");
+  } else if (!inWindow && wdtActive) {
+    esp_task_wdt_delete(NULL);
+    wdtActive = false;
+    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+  }
+
   // 07:30 AM and 03:30 PM (15:30)
   int currentSlot = -1;
   if (hour == 7 && minute >= 30 && minute < 35) currentSlot = 0;
@@ -160,12 +177,12 @@ void setup() {
 
   // Watchdog setup
   esp_task_wdt_config_t twdt_config = {
-      .timeout_ms = 30000,
+      .timeout_ms = 300000,
       .idle_core_mask = 0,
       .trigger_panic = true,
   };
-  esp_task_wdt_init(&twdt_config);
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_reconfigure(&twdt_config);
+  // esp_task_wdt_add(NULL); -> Moved to dynamic window in checkSchedule()
 
   timer.setInterval(5000L, sendFlowRate);      // Balanced update (5 seconds)
   timer.setInterval(10000L, checkWiFi);        // WiFi status updates
