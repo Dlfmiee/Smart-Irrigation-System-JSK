@@ -15,7 +15,8 @@ char ssid[] = "WiFi JSK";
 char pass[] = "vhwau35565";
 
 #define FLOW_SENSOR_PIN 27
-#define LED_PIN 26
+#define WIFI_LED_PIN 2  // Built-in Blue LED: ON = WiFi connected, OFF = disconnected
+#define LED_PIN 26      // External LED: blinks on power-on only
 
 volatile int pulseCount = 0;
 float flowRate = 0;
@@ -96,9 +97,10 @@ void logToGoogleSheets() {
 
 void checkWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(LED_PIN, LOW); // LED logic can be adjusted if needed
+    digitalWrite(WIFI_LED_PIN, HIGH); // Blue LED ON = WiFi connected
   } else {
-    Serial.println("📶 WiFi reconnect...");
+    digitalWrite(WIFI_LED_PIN, LOW);  // Blue LED OFF = disconnected
+    Serial.println("📶 WiFi reconnecting...");
     WiFi.begin(ssid, pass);
   }
 }
@@ -129,16 +131,29 @@ void checkSchedule() {
     Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // 07:30 AM and 03:30 PM (15:30)
+  // 07:28 AM and 03:28 PM (15:28) - Staggered to avoid conflict
   int currentSlot = -1;
-  if (hour == 7 && minute >= 30 && minute < 35) currentSlot = 0;
-  else if (hour == 15 && minute >= 30 && minute < 35) currentSlot = 1;
+  if (hour == 7 && minute == 28) currentSlot = 0;
+  else if (hour == 15 && minute == 28) currentSlot = 1;
 
   if (currentSlot != -1 && (day != lastReportDay || currentSlot != lastReportSlot)) {
-    Serial.printf("📢 [SCHEDULE] Reporting Waterflow E at %02d:%02d\n", hour, minute);
+    Serial.printf("📢 [SCHEDULE] Connecting for Waterflow E report at %02d:%02d\n", hour, minute);
     
-    // Force Blynk update on schedule
-    Blynk.virtualWrite(V0, flowRate);
+    Blynk.connect();
+    unsigned long start = millis();
+    while (!Blynk.connected() && millis() - start < 10000) {
+      Blynk.run();
+      delay(100);
+    }
+
+    if (Blynk.connected()) {
+      Blynk.virtualWrite(V0, flowRate);
+      Blynk.run();
+      delay(1000);
+      Blynk.disconnect();
+      Serial.println("✅ Scheduled sync complete.");
+    }
+    
     logToGoogleSheets(); // Log to sheets on schedule too
     
     lastReportDay = day;
@@ -151,8 +166,9 @@ void setup() {
   delay(1000); 
   Serial.println("\n=== WATERFLOW SENSOR E (2s INTERVAL) ===");
 
+  pinMode(WIFI_LED_PIN, OUTPUT);
   pinMode(LED_PIN, OUTPUT);
-  // Initial LED Test
+  // Startup blink on external LED (power-on indicator)
   for(int i=0; i<3; i++) {
     digitalWrite(LED_PIN, HIGH); delay(100);
     digitalWrite(LED_PIN, LOW);  delay(100);
@@ -192,14 +208,13 @@ void setup() {
 }
 
 void loop() {
-  Blynk.run();
+  if (Blynk.connected()) Blynk.run();
   timer.run();
-  if (wdtActive) esp_task_wdt_reset(); 
+  if (wdtActive) esp_task_wdt_reset();
 
-  // Real-time LED feedback: Turn ON if pulse was detected in the last 1.5 seconds
+  // Real-time LED feedback: LED ON if water pulse detected in last 1.5s
   static bool currentLedState = false;
   bool shouldBeOn = (millis() - lastPulseTime < 1500 && lastPulseTime > 0);
-
   if (shouldBeOn != currentLedState) {
     currentLedState = shouldBeOn;
     digitalWrite(LED_PIN, currentLedState ? HIGH : LOW);

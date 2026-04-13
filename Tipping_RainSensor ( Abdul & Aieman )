@@ -79,9 +79,9 @@ void checkScheduledPublish() {
   int minute = timeinfo.tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  // Window: 07:27 to 07:33 and 15:27 to 15:33
-  bool inWindow = ( (hour == 7 && minute >= 27 && minute <= 33) || 
-                    (hour == 15 && minute >= 27 && minute <= 33) );
+  // Window: 07:26 to 07:32 and 15:26 to 15:32
+  bool inWindow = ( (hour == 7 && minute >= 26 && minute <= 32) || 
+                    (hour == 15 && minute >= 26 && minute <= 32) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
@@ -97,20 +97,34 @@ void checkScheduledPublish() {
   if (((hour == 7 && minute == 30) || (hour == 15 && minute == 30)) && hour != lastPublishHour) {
     lastPublishHour = hour;
     
-    Serial.println("📤 [SCHEDULED] Updating shared virtual pins...");
+    Serial.println("📤 [SCHEDULED] Connecting for one-shot sync...");
+    Blynk.connect();
+    
+    unsigned long start = millis();
+    while (!Blynk.connected() && millis() - start < 10000) {
+      Blynk.run();
+      delay(100);
+    }
 
-    float rainfall = tipCount * RAIN_PER_TIP;
-    bool isRaining = (millis() - lastTipTime < rainTimeout || analogRead(RAIN_SENSOR_PIN) < RAIN_THRESHOLD);
-    int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
+    if (Blynk.connected()) {
+      int rawRain = analogRead(RAIN_SENSOR_PIN);
+      float rainfall = tipCount * RAIN_PER_TIP;
+      bool isRaining = (millis() - lastTipTime < rainTimeout || rawRain < RAIN_THRESHOLD);
+      int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
 
-    // Direct Virtual Writes (Shared Account)
-    Blynk.virtualWrite(V8, rainfall);
-    Blynk.virtualWrite(V12, lockout);
+      // Direct Virtual Writes (Shared Account)
+      Blynk.virtualWrite(V8, rainfall);
+      Blynk.virtualWrite(V9, rawRain); // Raw moisture sensor level
+      Blynk.virtualWrite(V12, lockout);
+      
+      Blynk.run();
+      delay(1000);
+      Blynk.disconnect();
+      Serial.println("✅ Sync Complete. Disconnected.");
+    }
 
     // Backup to Google Sheets
     logToGoogleSheets();
-    
-    Serial.println("✅ Sync Complete.");
   }
 }
 
