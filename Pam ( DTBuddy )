@@ -8,9 +8,9 @@
   Logic: Continuous Status Sync (Pulse) + Robust Connectivity
 */
 
-#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_ID   "TMPL6AgU8jm-x"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN    "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
@@ -27,8 +27,8 @@ const char* pass = "vhwau35565";
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 // Remote Device Tokens
-const char* ALTF4_TOKEN      = "JM9P4q32gJOpSwRtCuwPiQ6iY_IwCGPj";
-const char* CYBERSPARK_TOKEN = "CF9rSGv-iVZRN61N3ZZ90Vx96dMXEv6S";
+const char* ALTF4_TOKEN      = "F3odZsHMu3LRquCQc0p-FNfc7brVvryt";
+const char* CYBERSPARK_TOKEN = "AYex-Uv5lo5RZMcR9FDMCqGbA2k-d4U-";
 
 // Pins
 const int relayPin = 26; // Pump Relay

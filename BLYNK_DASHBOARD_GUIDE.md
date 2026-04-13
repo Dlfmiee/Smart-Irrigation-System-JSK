@@ -3,7 +3,7 @@
 This guide provides the exact configuration needed to build a professional-grade monitoring and control center for your Smart Irrigation System. 
 
 > [!IMPORTANT]
-> **Project Credentials**: Ensure all 8 ESP32 modules use the same **Template ID (TMPL67aY-VULb)** and **Template Name (ESP32 WIFI)**, but **DIFFERENT** Auth Tokens (as assigned in the code) to prevent connection conflicts.
+> **Project Credentials**: Ensure all 8 ESP32 modules use the same **Template ID (TMPL6AgU8jm-x)** and **Template Name (ESP32 WIFI)**, but **DIFFERENT** Auth Tokens (as assigned in the code) to prevent connection conflicts.
 
 ---
 

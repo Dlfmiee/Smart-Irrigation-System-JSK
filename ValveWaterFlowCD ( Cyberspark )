@@ -7,9 +7,9 @@
   Bridge: Syncs V3/V4 to Master Pump
 */
 
-#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_ID   "TMPL6AgU8jm-x"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "CF9rSGv-iVZRN61N3ZZ90Vx96dMXEv6S"
+#define BLYNK_AUTH_TOKEN    "AYex-Uv5lo5RZMcR9FDMCqGbA2k-d4U-"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
@@ -24,7 +24,7 @@ const char* ssid = "WiFi JSK";
 const char* pass = "vhwau35565";
 
 // Bridge to Master Pump
-const char* MASTER_PUMP_TOKEN = "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd";
+const char* MASTER_PUMP_TOKEN = "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-";
 
 // --- PIN DEFINITIONS ---
 #define RELAY_C_PIN 14
