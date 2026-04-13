@@ -302,10 +302,10 @@ void setup() {
 void loop() {
   if (Blynk.connected()) {
     Blynk.run();
-  } else {
+  } else if (WiFi.status() == WL_CONNECTED) {
     static unsigned long lastReconnect = 0;
-    if (millis() - lastReconnect > 30000) {
-      Serial.println("🔄 [BLYNK] Attempting stabilized reconnect...");
+    if (millis() - lastReconnect > 15000) {
+      Serial.println("🔄 [BLYNK] WiFi OK. Attempting cloud reconnection...");
       Blynk.connect();
       lastReconnect = millis();
     }
