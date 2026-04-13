@@ -141,6 +141,11 @@ void monitorStatus() {
 void checkMidnightReset() {
   struct tm timeinfo;
   if (getLocalTime(&timeinfo) && timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
+    if (lastResetDay != timeinfo.tm_mday) {
+      lastResetDay = timeinfo.tm_mday;
+      tipCount = 0;
+      lastPublishHour = -1;
+
       Serial.println("📤 [MIDNIGHT] Resetting Rain Data...");
       Blynk.connect();
       unsigned long start = millis();
@@ -157,6 +162,7 @@ void checkMidnightReset() {
         Blynk.disconnect();
         Serial.println("🔄 Daily Rainfall reset to 0. Disconnected.");
       }
+    }
   }
 }
 
