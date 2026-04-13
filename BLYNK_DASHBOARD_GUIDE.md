@@ -1,94 +1,57 @@
-# 📱 Blynk IoT Master Dashboard Guide
+# 📱 Blynk IoT Master Dashboard Guide (Updated)
 
-This guide provides the exact configuration needed to build a professional-grade monitoring and control center for your Smart Irrigation System. 
+This guide provides the final configuration for your 3-device Smart Irrigation System.
 
 > [!IMPORTANT]
-> **Project Credentials**: Ensure all 8 ESP32 modules use the same **Template ID (TMPL6AgU8jm-x)** and **Template Name (ESP32 WIFI)**, but **DIFFERENT** Auth Tokens (as assigned in the code) to prevent connection conflicts.
+> **Template Info:**  
+> **Template ID:** `TMPL6AgU8jm-x`  
+> **Template Name:** `ESP32 WIFI`  
+> Ensure all devices use this exact Template ID.
 
 ---
 
-## 1. Handling Multiple Devices
-Since **Syahdiq**, **Abdul**, and **Aieman** now have their own unique identities, they will appear as **separate devices** in your Blynk App.
-
-### How to put them all on ONE Dashboard:
-1.  Open your **Blynk Mobile App**.
-2.  Switch to **Developer Mode** (wrench icon).
-3.  Add a widget (e.g., Gauge for Moisture).
-4.  In the widget settings, tap **"Datastream"**.
-5.  **THE KEY STEP**: At the top of the Datastream selector, tap on the **Device Name**.
-6.  Select the specific device (e.g., "Syahdiq") and then pick the V7 moisture datastream.
-7.  Repeat this for each device until your "Master Dashboard" is complete!
+## 1. Device Hierarchy (3 Devices)
+You will see 3 devices in your Blynk console. Add them all to your mobile dashboard:
+1.  **KEBUN** (Master Pump & all Sensors)
+2.  **VALVE AB** (Fertilizer Valves)
+3.  **VALVE CD** (Water Valves)
 
 ---
 
-## 2. Datastream Definitions
-Go to **Blynk Console > Templates > ESP32 WIFI > Datastreams**. Configure exactly as follows:
+## 2. Datastream Definitions (V0 to V13)
+In **Blynk Console > Datastreams**, ensure these settings:
 
-| Pin | Name | Data Type | Min/Max | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| **V0** | Flow Rate | Double | 0/5 | Water throughput (L/sec) |
-| **V1** | Tank Status | Integer | 0/1 | 1=Full, 0=Low |
-| **V2** | Nutrient (EC) | Double | 0/10 | Nutritional conductivity (mS/cm) |
-| **V3** | Valve C | Integer | 0/1 | Cyberspark (Water Inlet) |
-| **V4** | Valve D | Integer | 0/1 | Cyberspark (Water Outlet) |
-| **V5** | Valve A | Integer | 0/1 | ALTF4 (Fertilizer Inlet) |
-| **V6** | Valve B | Integer | 0/1 | ALTF4 (Fertilizer Outlet) |
-| **V7** | Humidity (%) | Integer | 0/100 | Soil moisture percentage |
-| **V8** | Rainfall | Double | 0/500 | Daily cumulative total (mm) |
-| **V9** | Rain Raw | Integer | 0/4095 | Analog moisture level on sensor |
-| **V10** | Weather | String | - | "RAINING" or "NO RAIN" |
-| **V11** | Pump | Integer | 0/1 | On/Off Status |
-| **V12** | Lockout | Integer | 0/1 | Safety pause (Red = Locked) |
-| **V13** | Mode | Integer | 0/2 | 0:Auto, 1:Man-ON, 2:Man-OFF |
-
----
-
-## 2. Mobile App Widget Configuration
-For a stunning, high-end look, use the following widget settings in the **Blynk Mobile App**:
-
-### **A. Master Safety & Mode (Top Priority)**
-*   **LED (V12)**: Name: "SYSTEM LOCKOUT". 
-    *   *Color*: **Vibrant Red (#FF3B30)**. 
-    *   *Logic*: Glows when irrigation is paused by rain/wet soil.
-*   **Segmented Switch (V13)**: Name: "MASTER PUMP CONTROL".
-    *   *Segments*:
-        1. **AUTO** (Value 0) - Default smart logic.
-        2. **MAN ON** (Value 1) - Manual Force Start.
-        3. **MAN OFF** (Value 2) - Manual Force Stop/Kill Switch.
-    *   *Color*: **Ocean Blue (#007AFF)**.
-
-### **B. Live Status Indicators**
-*   **LED (V11)**: Name: "PUMP ACTIVE".
-    *   *Color*: **Mint Green (#4CD964)**.
-*   **Labeled Value (V1)**: Name: "TANK WATER LEVEL".
-    *   *Logic*: Use Map settings to show "FULL" for 1 and "LOW" for 0.
-    *   *Color*: **Cyan (#5AC8FA)**.
-
-### **C. Environmental Intelligence (Analytical)**
-*   **Gauge (V7)**: Name: "SOIL MOISTURE".
-    *   *Unit*: **%**.
-    *   *Gradient*: Red (0%) -> Yellow (50%) -> Blue (100%).
-    *   *Note*: Transmits data only during designated scheduled phases.
-*   **Labeled Value (V8)**: Name: "DAILY RAINFALL".
-    *   *Unit*: **mm**.
-    *   *Icon*: "Cloud" or "Droplet".
-    *   *Note*: Transmits synchronized data specifically at 07:30 AM and 03:30 PM.
-*   **Gauge (V2)**: Name: "NUTRIENT LEVEL (EC)".
-    *   *Unit*: **mS/cm** (Type this in manually).
-    *   *Color*: **Gold (#FFD60A)**.
-
-### **D. Manual Valve Overrides**
-*   **4x Buttons (V3, V4, V5, V6)**:
-    *   *Mode*: Switch (or Push for testing).
-    *   *Water Valves (V3, V4)*: **Blue (#007AFF)**.
-    *   *Fertilizer Valves (V5, V6)*: **Purple (#AF52DE)**.
+| Pin | Name | Data Type | Min/Max | Unit | History |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **V0** | Flow Rate | Double | 0 / 5 | **L/sec** | **ON** |
+| **V1** | Tank Status | Integer | 0 / 1 | - | OFF |
+| **V2** | Nutrient (EC) | Double | 0 / 10 | mS/cm | **ON** |
+| **V3** | Valve C | Integer | 0 / 1 | - | OFF |
+| **V4** | Valve D | Integer | 0 / 1 | - | OFF |
+| **V5** | Valve A | Integer | 0 / 1 | - | OFF |
+| **V6** | Valve B | Integer | 0 / 1 | - | OFF |
+| **V7** | Moisture (%) | Integer | 0 / 100| % | **ON** |
+| **V8** | Rain (Daily) | Double | 0 / 500| **mm** | **ON** |
+| **V9** | Rain Raw | Integer | 0 / 4095| - | OFF |
+| **V10** | Weather | String | - | - | OFF |
+| **V11** | Pump Status | Integer | 0 / 1 | - | **ON** |
+| **V12** | Lockout | Integer | 0 / 1 | - | OFF |
+| **V13** | Manual Mode | Integer | 0 / 2 | - | OFF |
 
 ---
 
-## 3. Premium Design Aesthetics
-1.  **Dark Mode**: Always use "Dark Theme" in Blynk for the most premium feel.
-2.  **Grouping**: Place Status LEDs at the very top, followed by the Mode Switch, then Gauges, and manual buttons at the bottom.
-3.  **SuperChart**: Add a SuperChart using **V0 (Flow Rate)** and **V7 (Moisture)** to track your system's performance over 24 hours.
+## 3. Mobile Widget Configuration
+For the most premium look, use these settings:
+
+*   **V12 (System Lockout):** LED Widget. Color: **Bright Red (#FF3B30)**.
+*   **V13 (Pump Mode):** Segmented Switch. 0:AUTO, 1:MAN ON, 2:MAN OFF. Color: **Blue (#007AFF)**.
+*   **V11 (Pump Status):** LED Widget (or Gauge). Color: **Green (#4CD964)**.
+*   **V7 (Moisture):** Gauge Widget. Use a Gradient (Red -> Blue). 
+*   **V8 (Rainfall):** Labeled Value. Icon: **Droplet**. Unit: **mm**.
+*   **V0 (Flow Rate):** SuperChart or Gauge. Unit: **L/sec**.
 
 ---
-*Generated for the Smart-Irrigation-System-JSK Project.*
+
+## 4. Troubleshooting
+*   **Sensors showing "Offline":** This is normal! They sync and then disconnect to save power/data. Check the "Last Reported" time.
+*   **Valves showing "Offline":** Check WiFi signal strength. They should stay online permanently.
