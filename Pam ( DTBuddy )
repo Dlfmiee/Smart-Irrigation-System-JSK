@@ -285,7 +285,7 @@ void setup() {
 
   timer.setInterval(5000L, evaluatePumpState);      // Balanced evaluation (5s)
   timer.setInterval(10000L, checkWiFi);             // WiFi stabilizer
-  timer.setInterval(30000L, fetchRemoteValveStatus); // Independent Pulse Sync (30s)
+  timer.setInterval(300000L, fetchRemoteValveStatus); // Long-interval Failsafe Sync (5m)
   timer.setInterval(300000L, logToGoogleSheets);   // Google Sheets Log (5m)
 
   Serial.println("[SYSTEM] Pump Node Ready (B/D Focused Sync)");
@@ -295,7 +295,12 @@ void loop() {
   if (Blynk.connected()) {
     Blynk.run();
   } else {
-    Blynk.connect();
+    static unsigned long lastReconnect = 0;
+    if (millis() - lastReconnect > 30000) {
+      Serial.println("🔄 [BLYNK] Attempting stabilized reconnect...");
+      Blynk.connect();
+      lastReconnect = millis();
+    }
   }
   timer.run();
   if (wdtActive) esp_task_wdt_reset();

@@ -63,19 +63,28 @@ void sendFlowRate() {
   bool isResetSlot = ((hour == 8 && minute == 31) ||
                       (hour == 16 && minute == 31));
 
-  if (isTargetSlot) {
+  if (isTargetSlot || (isResetSlot && lastFlowRate > 0)) {
     if (minute != lastSentMinute) {
-      Blynk.virtualWrite(V0, flowRate);
-      lastSentMinute = minute;
-      lastFlowRate = flowRate;
-      Serial.println("[BLYNK] 3-Point Snapshot Sent.");
+      Serial.println("📤 [SNAPSHOT] Connecting for flow sync...");
+      Blynk.connect();
+      unsigned long start = millis();
+      while (!Blynk.connected() && millis() - start < 10000) {
+        Blynk.run();
+        delay(100);
+      }
+
+      if (Blynk.connected()) {
+        float valToSend = isTargetSlot ? flowRate : 0;
+        Blynk.virtualWrite(V0, valToSend);
+        Blynk.run();
+        delay(1000);
+        Blynk.disconnect();
+        
+        lastSentMinute = minute;
+        lastFlowRate = valToSend;
+        Serial.println(isTargetSlot ? "✅ Snapshot Sent." : "✅ Final 0-Reset Sent.");
+      }
     }
-  } else if (isResetSlot && lastFlowRate > 0) {
-    // Final Reset to 0 (Last)
-    Blynk.virtualWrite(V0, 0);
-    lastFlowRate = 0;
-    lastSentMinute = 31;
-    Serial.println("[BLYNK] Final 0-Reset Sent.");
   }
 }
 

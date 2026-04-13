@@ -141,15 +141,22 @@ void monitorStatus() {
 void checkMidnightReset() {
   struct tm timeinfo;
   if (getLocalTime(&timeinfo) && timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
-    if (lastResetDay != timeinfo.tm_mday) {
-      tipCount = 0;
-      lastResetDay = timeinfo.tm_mday;
-      lastPublishHour = -1;
-      
-      Blynk.virtualWrite(V8, 0);
-      Blynk.virtualWrite(V12, 0);
-      Serial.println("🔄 Daily Rainfall reset to 0.");
-    }
+      Serial.println("📤 [MIDNIGHT] Resetting Rain Data...");
+      Blynk.connect();
+      unsigned long start = millis();
+      while (!Blynk.connected() && millis() - start < 10000) {
+        Blynk.run();
+        delay(100);
+      }
+
+      if (Blynk.connected()) {
+        Blynk.virtualWrite(V8, 0);
+        Blynk.virtualWrite(V12, 0);
+        Blynk.run();
+        delay(1000);
+        Blynk.disconnect();
+        Serial.println("🔄 Daily Rainfall reset to 0. Disconnected.");
+      }
   }
 }
 
@@ -157,7 +164,7 @@ void checkMidnightReset() {
 void checkSystem() {
   if (WiFi.status() == WL_CONNECTED) {
     digitalWrite(WIFI_LED_PIN, HIGH);
-    if (!Blynk.connected()) Blynk.connect();
+    // Blynk.connect() moved to scheduled sync only
   } else {
     digitalWrite(WIFI_LED_PIN, LOW);
     WiFi.begin(ssid, pass);

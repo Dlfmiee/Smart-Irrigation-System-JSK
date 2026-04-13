@@ -127,8 +127,22 @@ void scheduledBlynkPublish() {
   }
 
   if (shouldPublishToBlynk()) {
-    Serial.println("[SCHEDULED] Publishing to Blynk at scheduled time...");
-    sendMoistureToBlynk();
+    Serial.println("📤 [SCHEDULED] Connecting for Moisture sync...");
+    Blynk.connect();
+    
+    unsigned long start = millis();
+    while (!Blynk.connected() && millis() - start < 10000) {
+      Blynk.run();
+      delay(100);
+    }
+
+    if (Blynk.connected()) {
+      sendMoistureToBlynk();
+      Blynk.run();
+      delay(1000);
+      Blynk.disconnect();
+      Serial.println("✅ Sync Complete. Disconnected.");
+    }
   }
 }
 
@@ -265,7 +279,7 @@ void setup() {
 
 /************ LOOP ************/
 void loop() {
-  Blynk.run();
+  if (Blynk.connected()) Blynk.run();
   timer.run();
   if (wdtActive) {
     esp_task_wdt_reset();

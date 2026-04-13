@@ -67,11 +67,25 @@ void sendDailyReport() {
   int floatState  = digitalRead(FLOAT_PIN);
   int floatStatus = (floatState == LOW) ? 1 : 0;
 
-  Serial.println("📢 [REPORT] Sending Daily Data (07:00 AM)...");
+  Serial.println("📤 [SCHEDULED] Connecting for Tank/EC sync...");
+  Blynk.connect();
+  
+  unsigned long start = millis();
+  while (!Blynk.connected() && millis() - start < 10000) {
+    Blynk.run();
+    delay(100);
+  }
 
-  // 1. Hantar ke Blynk
-  Blynk.virtualWrite(V1, floatStatus);
-  Blynk.virtualWrite(V2, ecValue);
+  if (Blynk.connected()) {
+    // 1. Hantar ke Blynk
+    Blynk.virtualWrite(V1, floatStatus);
+    Blynk.virtualWrite(V2, ecValue);
+    
+    Blynk.run();
+    delay(1000);
+    Blynk.disconnect();
+    Serial.println("✅ Sync Complete. Disconnected.");
+  }
 
   // 2. Hantar ke Google Sheets
   WiFiClientSecure client;
@@ -199,7 +213,7 @@ void setup() {
 
 /************ LOOP ************/
 void loop() {
-  Blynk.run();
+  if (Blynk.connected()) Blynk.run();
   timer.run();
   if (wdtActive) esp_task_wdt_reset();
 }
