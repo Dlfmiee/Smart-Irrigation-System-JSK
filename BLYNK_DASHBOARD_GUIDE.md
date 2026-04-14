@@ -28,8 +28,8 @@ In **Blynk Console > Datastreams**, ensure these settings:
 | **V2** | Nutrient (EC) | Double | 0 / 10 | mS/cm | **ON** |
 | **V3** | Valve C | Integer | 0 / 1 | - | OFF |
 | **V4** | Valve D | Integer | 0 / 1 | - | OFF |
-| **V5** | Valve A | Integer | 0 / 1 | - | OFF |
-| **V6** | Valve B | Integer | 0 / 1 | - | OFF |
+| **V5** | Valve A | Integer | 0 / 1 | - | **ON** |
+| **V6** | Valve B | Integer | 0 / 1 | - | **ON** |
 | **V7** | Moisture (%) | Integer | 0 / 100| % | **ON** |
 | **V8** | Rain (Daily) | Double | 0 / 500| **mm** | **ON** |
 | **V9** | Rain Raw | Integer | 0 / 4095| - | OFF |
@@ -49,6 +49,10 @@ For the most premium look, use these settings:
 *   **V7 (Moisture):** Gauge Widget. Use a Gradient (Red -> Blue). 
 *   **V8 (Rainfall):** Labeled Value. Icon: **Droplet**. Unit: **mm**.
 *   **V0 (Flow Rate):** SuperChart or Gauge. Unit: **L/sec**.
+*   **Valve Performance Chart (SuperChart):** 
+    - Add **V5 (Valve A)**, **V6 (Valve B)**, and **V0 (Flow Rate)**.
+    - Set V5/V6 to **Step** chart type to see clear ON/OFF blocks.
+    - This allows you to verify that water is flowing (V0 > 0) only when valves are open.
 
 ---
 

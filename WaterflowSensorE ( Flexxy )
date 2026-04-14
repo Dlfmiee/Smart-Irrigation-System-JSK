@@ -55,9 +55,9 @@ void sendFlowRate() {
   Serial.println(" L/sec");
 
   // Exact Target Slots: First (Leak Check T-2), Mid Check, Final Reset
-  bool isTargetSlot = ((hour == 7 && minute == 58) ||
+  bool isTargetSlot = ((hour == 7 && minute == 10) ||
                        (hour == 8 && minute == 15) ||
-                       (hour == 15 && minute == 58) ||
+                       (hour == 15 && minute == 10) ||
                        (hour == 16 && minute == 15));
                        
   bool isResetSlot = ((hour == 8 && minute == 31) ||
@@ -78,12 +78,16 @@ void sendFlowRate() {
         Blynk.virtualWrite(V0, valToSend);
         Blynk.run();
         delay(1000);
-        Blynk.disconnect();
         
         lastSentMinute = minute;
         lastFlowRate = valToSend;
         Serial.println(isTargetSlot ? "✅ Snapshot Sent." : "✅ Final 0-Reset Sent.");
+      } else {
+        Serial.println("⚠️ Snapshot FAILED — Token might be busy.");
       }
+
+      Blynk.disconnect(); // Failsafe
+      Serial.println("💤 Disconnected from Blynk.");
     }
   }
 }
@@ -125,9 +129,9 @@ void checkSchedule() {
   int day = timeinfo->tm_yday;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  // Window: 07:27 to 08:35 AND 15:27 to 16:35
-  bool inMorningWindow = (hour == 7 && minute >= 27) || (hour == 8 && minute <= 35);
-  bool inAfternoonWindow = (hour == 15 && minute >= 27) || (hour == 16 && minute <= 35);
+  // Window: 07:02 to 08:35 AND 15:02 to 16:35
+  bool inMorningWindow = (hour == 7 && minute >= 2) || (hour == 8 && minute <= 35);
+  bool inAfternoonWindow = (hour == 15 && minute >= 2) || (hour == 16 && minute <= 35);
   bool inWindow = inMorningWindow || inAfternoonWindow;
 
   if (inWindow && !wdtActive) {
@@ -140,15 +144,28 @@ void checkSchedule() {
     Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // 07:28 AM and 03:28 PM (15:28) - Staggered to avoid conflict
-  int currentSlot = -1;
-  if (hour == 7 && minute == 28) currentSlot = 0;
-  else if (hour == 15 && minute == 28) currentSlot = 1;
+  // --- TWO-STAGE CONNECTION LOGIC ---
+  int prepSlot = -1;
+  if (hour == 7 && minute == 5) prepSlot = 0;
+  else if (hour == 15 && minute == 5) prepSlot = 1;
 
-  if (currentSlot != -1 && (day != lastReportDay || currentSlot != lastReportSlot)) {
-    Serial.printf("📢 [SCHEDULE] Connecting for Waterflow E report at %02d:%02d\n", hour, minute);
-    
+  int workSlot = -1;
+  if (hour == 7 && minute == 10) workSlot = 0;
+  else if (hour == 15 && minute == 10) workSlot = 1;
+
+  // Stage 1: Connect 5m early
+  if (prepSlot != -1 && minute != lastSentMinute) {
+    Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
     Blynk.connect();
+    lastSentMinute = minute; // latch
+  }
+
+  // Stage 2: Report and Disconnect
+  if (workSlot != -1 && (day != lastReportDay || workSlot != lastReportSlot)) {
+    Serial.printf("📢 [STAGE 2] Reporting Waterflow E at %02d:%02d\n", hour, minute);
+    
+    // Ensure we are connected
+    if (!Blynk.connected()) Blynk.connect();
     unsigned long start = millis();
     while (!Blynk.connected() && millis() - start < 10000) {
       Blynk.run();
@@ -159,14 +176,17 @@ void checkSchedule() {
       Blynk.virtualWrite(V0, flowRate);
       Blynk.run();
       delay(1000);
-      Blynk.disconnect();
-      Serial.println("✅ Scheduled sync complete.");
+      Serial.println("✅ Scheduled report sent.");
+    } else {
+      Serial.println("⚠️ Report FAILED — Token might be busy.");
     }
     
-    logToGoogleSheets(); // Log to sheets on schedule too
+    Blynk.disconnect(); // Always Release
+    Serial.println("💤 Disconnected from Blynk.");
     
+    logToGoogleSheets();
     lastReportDay = day;
-    lastReportSlot = currentSlot;
+    lastReportSlot = workSlot;
   }
 }
 

@@ -79,9 +79,9 @@ void checkScheduledPublish() {
   int minute = timeinfo.tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  // Window: 07:26 to 07:32 and 15:26 to 15:32
-  bool inWindow = ( (hour == 7 && minute >= 26 && minute <= 32) || 
-                    (hour == 15 && minute >= 26 && minute <= 32) );
+  // Window: 07:12 to 07:27 and 15:12 to 15:27
+  bool inWindow = ( (hour == 7 && minute >= 12 && minute <= 27) || 
+                    (hour == 15 && minute >= 12 && minute <= 27) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
@@ -93,12 +93,19 @@ void checkScheduledPublish() {
     Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // Sync at 07:30 AM or 15:30 PM (3:30 PM)
-  if (((hour == 7 && minute == 30) || (hour == 15 && minute == 30)) && hour != lastPublishHour) {
-    lastPublishHour = hour;
+  // Stage 1: Connect 5m early (07:15 / 15:15)
+  if (((hour == 7 && minute == 15) || (hour == 15 && minute == 15)) && minute != lastPublishHour) {
+      Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
+      Blynk.connect();
+      lastPublishHour = minute; // temporary latch
+  }
+
+  // Stage 2: Report and Disconnect (07:20 / 15:20)
+  if (((hour == 7 && minute == 20) || (hour == 15 && minute == 20)) && hour != lastPublishHour) {
+    lastPublishHour = hour; // final hour latch
     
-    Serial.println("📤 [SCHEDULED] Connecting for one-shot sync...");
-    Blynk.connect();
+    Serial.println("📤 [STAGE 2] Reporting Rainfall sync...");
+    if (!Blynk.connected()) Blynk.connect();
     
     unsigned long start = millis();
     while (!Blynk.connected() && millis() - start < 10000) {
@@ -112,18 +119,20 @@ void checkScheduledPublish() {
       bool isRaining = (millis() - lastTipTime < rainTimeout || rawRain < RAIN_THRESHOLD);
       int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
 
-      // Direct Virtual Writes (Shared Account)
       Blynk.virtualWrite(V8, rainfall);
-      Blynk.virtualWrite(V9, rawRain); // Raw moisture sensor level
+      Blynk.virtualWrite(V9, rawRain);
       Blynk.virtualWrite(V12, lockout);
       
       Blynk.run();
       delay(1000);
-      Blynk.disconnect();
-      Serial.println("✅ Sync Complete. Disconnected.");
+      Serial.println("✅ Sync Complete.");
+    } else {
+      Serial.println("⚠️ Sync FAILED — Token might be busy.");
     }
 
-    // Backup to Google Sheets
+    Blynk.disconnect(); // Always Release
+    Serial.println("💤 Disconnected from Blynk.");
+
     logToGoogleSheets();
   }
 }
@@ -159,9 +168,13 @@ void checkMidnightReset() {
         Blynk.virtualWrite(V12, 0);
         Blynk.run();
         delay(1000);
-        Blynk.disconnect();
-        Serial.println("🔄 Daily Rainfall reset to 0. Disconnected.");
+        Serial.println("🔄 Daily Rainfall reset to 0.");
+      } else {
+        Serial.println("⚠️ Midnight Reset FAILED — Token might be busy.");
       }
+
+      Blynk.disconnect(); // Failsafe
+      Serial.println("💤 Disconnected from Blynk.");
     }
   }
 }

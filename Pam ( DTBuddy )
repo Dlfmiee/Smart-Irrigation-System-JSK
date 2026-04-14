@@ -8,9 +8,9 @@
   Logic: Continuous Status Sync (Pulse) + Robust Connectivity
 */
 
-#define BLYNK_TEMPLATE_ID   "TMPL6AgU8jm-x"
+#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
+#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
@@ -27,8 +27,8 @@ const char* pass = "vhwau35565";
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 // Remote Device Tokens
-const char* ALTF4_TOKEN      = "F3odZsHMu3LRquCQc0p-FNfc7brVvryt";
-const char* CYBERSPARK_TOKEN = "AYex-Uv5lo5RZMcR9FDMCqGbA2k-d4U-";
+const char* ALTF4_TOKEN      = "JM9P4q32gJOpSwRtCuwPiQ6iY_IwCGPj";
+const char* CYBERSPARK_TOKEN = "CF9rSGv-iVZRN61N3ZZ90Vx96dMXEv6S";
 
 // Pins
 const int relayPin = 26; // Pump Relay
@@ -134,13 +134,14 @@ void logToGoogleSheets() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
+  String url = String(googleScriptUrl) + "?pump=" + String(pumpRunning);
   String url = String(googleScriptUrl) 
              + "?pump=" + String(pumpRunning)
              + "&valveA=" + (v5_open ? "1" : "0")
              + "&valveB=" + (v6_open ? "1" : "0")
              + "&valveC=" + (v3_open ? "1" : "0")
              + "&valveD=" + (v4_open ? "1" : "0");
-  
+
   Serial.print("[LOG] Sheets Syncing Status... ");
   http.begin(client, url);
   int httpCode = http.GET();
@@ -151,7 +152,7 @@ void logToGoogleSheets() {
 // CONTINUOUS STATUS SYNC (PULSE) 
 void fetchRemoteValveStatus() {
   if (WiFi.status() != WL_CONNECTED) return;
-  
+
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
@@ -246,22 +247,22 @@ void setup() {
   Serial.begin(115200);
   delay(500);
   Serial.println("\n\n[STARTUP] Initializing Pump Node (B/D Only)...");
-  
+
   pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
-  
+
   stopPump();
 
   Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
   WiFi.begin(ssid, pass);
-  
+
   int wifiAttempts = 0;
   while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) {
     delay(500);
     Serial.print(".");
     wifiAttempts++;
   }
-  
+
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n✅ WiFi Connected! IP: " + WiFi.localIP().toString());
   } else {
@@ -270,7 +271,7 @@ void setup() {
 
   Serial.println("[SETUP] Configuring Blynk...");
   Blynk.config(BLYNK_AUTH_TOKEN);
-  
+
   if (!Blynk.connected()) {
     Serial.println("[SETUP] Connecting to Blynk server...");
     Blynk.connect();
@@ -285,7 +286,7 @@ void setup() {
 
   timer.setInterval(5000L, evaluatePumpState);      // Balanced evaluation (5s)
   timer.setInterval(10000L, checkWiFi);             // WiFi stabilizer
-  timer.setInterval(300000L, fetchRemoteValveStatus); // Long-interval Failsafe Sync (5m)
+  timer.setInterval(30000L, fetchRemoteValveStatus); // Independent Pulse Sync (30s)
   timer.setInterval(300000L, logToGoogleSheets);   // Google Sheets Log (5m)
 
   Serial.println("[SYSTEM] Pump Node Ready (B/D Focused Sync)");
@@ -294,14 +295,8 @@ void setup() {
 void loop() {
   if (Blynk.connected()) {
     Blynk.run();
-  } else if (WiFi.status() == WL_CONNECTED) {
-    static unsigned long lastReconnect = 0;
-    if (millis() - lastReconnect > 15000) {
-      Serial.println("🔄 [BLYNK] WiFi OK. Attempting cloud reconnection...");
-      Blynk.connect();
-      lastReconnect = millis();
-    }
+  } else {
+    Blynk.connect();
   }
   timer.run();
   if (wdtActive) esp_task_wdt_reset();
-}
