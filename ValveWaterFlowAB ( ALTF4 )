@@ -20,8 +20,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "WiFi JSK";
-const char* pass = "vhwau35565";
+const char* ssid = "keren";
+const char* pass = "oooooooo";
 
 // Bridge to Master Pump
 const char* MASTER_PUMP_TOKEN = "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-";
@@ -234,11 +234,18 @@ void checkSchedule() {
 // ================== WIFI CHECK ==================
 
 void checkWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
+  wl_status_t wifiStatus = WiFi.status();
+
+  if (wifiStatus == WL_CONNECTED) {
     digitalWrite(WIFI_LED_PIN, HIGH);
+  } else if (wifiStatus == WL_IDLE_STATUS) {
+    // Masih dalam proses connecting — JANGAN interrupt!
+    Serial.println("[WIFI] Sedang connecting... tunggu.");
   } else {
     digitalWrite(WIFI_LED_PIN, LOW);
-    Serial.println("[WIFI] Attempting to reconnect...");
+    Serial.printf("[WIFI] Lost (status=%d) — reconnecting...\n", wifiStatus);
+    WiFi.disconnect(true);
+    delay(200);
     WiFi.begin(ssid, pass);
   }
 }

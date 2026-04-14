@@ -11,8 +11,8 @@
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "keren";
+char pass[] = "oooooooo";
 
 #define FLOW_SENSOR_PIN 27
 #define WIFI_LED_PIN 2  // Built-in Blue LED: ON = WiFi connected, OFF = disconnected
@@ -55,9 +55,9 @@ void sendFlowRate() {
   Serial.println(" L/sec");
 
   // Exact Target Slots: First (Leak Check T-2), Mid Check, Final Reset
-  bool isTargetSlot = ((hour == 7 && minute == 10) ||
+  bool isTargetSlot = ((hour == 7 && minute == 58) ||
                        (hour == 8 && minute == 15) ||
-                       (hour == 15 && minute == 10) ||
+                       (hour == 15 && minute == 58) ||
                        (hour == 16 && minute == 15));
                        
   bool isResetSlot = ((hour == 8 && minute == 31) ||
@@ -108,12 +108,31 @@ void logToGoogleSheets() {
   }
 }
 
+bool ntpSynced = false;
+
 void checkWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(WIFI_LED_PIN, HIGH); // Blue LED ON = WiFi connected
+  wl_status_t wifiStatus = WiFi.status();
+
+  if (wifiStatus == WL_CONNECTED) {
+    digitalWrite(WIFI_LED_PIN, HIGH);
+    if (!ntpSynced) {
+      configTime(28800, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+      struct tm t;
+      if (getLocalTime(&t, 5000)) {
+        Serial.printf("✅ [NTP] Masa sync: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
+        ntpSynced = true;
+      } else {
+        Serial.println("⚠️ [NTP] Masih gagal — akan cuba lagi.");
+      }
+    }
+  } else if (wifiStatus == WL_IDLE_STATUS) {
+    Serial.println("📶 WiFi sedang connecting... tunggu.");
   } else {
-    digitalWrite(WIFI_LED_PIN, LOW);  // Blue LED OFF = disconnected
-    Serial.println("📶 WiFi reconnecting...");
+    ntpSynced = false;
+    digitalWrite(WIFI_LED_PIN, LOW);
+    Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
+    WiFi.disconnect(true);
+    delay(200);
     WiFi.begin(ssid, pass);
   }
 }
@@ -146,12 +165,12 @@ void checkSchedule() {
 
   // --- TWO-STAGE CONNECTION LOGIC ---
   int prepSlot = -1;
-  if (hour == 7 && minute == 5) prepSlot = 0;
-  else if (hour == 15 && minute == 5) prepSlot = 1;
+  if (hour == 7 && minute == 53) prepSlot = 0;
+  else if (hour == 15 && minute == 53) prepSlot = 1;
 
   int workSlot = -1;
-  if (hour == 7 && minute == 10) workSlot = 0;
-  else if (hour == 15 && minute == 10) workSlot = 1;
+  if (hour == 7 && minute == 58) workSlot = 0;
+  else if (hour == 15 && minute == 58) workSlot = 1;
 
   // Stage 1: Connect 5m early
   if (prepSlot != -1 && minute != lastSentMinute) {

@@ -20,8 +20,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "WiFi JSK";
-const char* pass = "vhwau35565";
+const char* ssid = "keren";
+const char* pass = "oooooooo";
 
 // Google Sheets Log
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
@@ -134,7 +134,6 @@ void logToGoogleSheets() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
-  String url = String(googleScriptUrl) + "?pump=" + String(pumpRunning);
   String url = String(googleScriptUrl) 
              + "?pump=" + String(pumpRunning)
              + "&valveA=" + (v5_open ? "1" : "0")
@@ -232,11 +231,18 @@ BLYNK_CONNECTED() {
 // ================== WIFI CHECK ==================
 
 void checkWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    digitalWrite(ledPin, HIGH); // Use ledPin as status
+  wl_status_t wifiStatus = WiFi.status();
+
+  if (wifiStatus == WL_CONNECTED) {
+    digitalWrite(ledPin, HIGH);
+  } else if (wifiStatus == WL_IDLE_STATUS) {
+    // Masih dalam proses connecting — JANGAN interrupt!
+    Serial.println("[WIFI] Sedang connecting... tunggu.");
   } else {
     digitalWrite(ledPin, LOW);
-    Serial.println("[WIFI] Attempting to reconnect...");
+    Serial.printf("[WIFI] Lost (status=%d) — reconnecting...\n", wifiStatus);
+    WiFi.disconnect(true);
+    delay(200);
     WiFi.begin(ssid, pass);
   }
 }

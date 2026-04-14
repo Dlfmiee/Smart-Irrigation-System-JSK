@@ -16,8 +16,8 @@
   - Schedule: Only communicates at 07:30 AM and 03:30 PM
 */
 
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "keren";
+char pass[] = "oooooooo";
 
 // --- EXTERNAL LINKS ---
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
@@ -93,15 +93,15 @@ void checkScheduledPublish() {
     Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // Stage 1: Connect 5m early (07:15 / 15:15)
-  if (((hour == 7 && minute == 15) || (hour == 15 && minute == 15)) && minute != lastPublishHour) {
+  // Stage 1: Connect 5m early (06:55 / 14:55)
+  if (((hour == 6 && minute == 55) || (hour == 14 && minute == 55)) && minute != lastPublishHour) {
       Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
       Blynk.connect();
       lastPublishHour = minute; // temporary latch
   }
 
-  // Stage 2: Report and Disconnect (07:20 / 15:20)
-  if (((hour == 7 && minute == 20) || (hour == 15 && minute == 20)) && hour != lastPublishHour) {
+  // Stage 2: Report and Disconnect (07:00 / 15:00)
+  if (((hour == 7 && minute == 0) || (hour == 15 && minute == 0)) && hour != lastPublishHour) {
     lastPublishHour = hour; // final hour latch
     
     Serial.println("📤 [STAGE 2] Reporting Rainfall sync...");
@@ -180,12 +180,31 @@ void checkMidnightReset() {
 }
 
 // ================== SYSTEM TASKS ==================
+bool ntpSynced = false;
+
 void checkSystem() {
-  if (WiFi.status() == WL_CONNECTED) {
+  wl_status_t wifiStatus = WiFi.status();
+
+  if (wifiStatus == WL_CONNECTED) {
     digitalWrite(WIFI_LED_PIN, HIGH);
-    // Blynk.connect() moved to scheduled sync only
+    if (!ntpSynced) {
+      configTime(28800, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+      struct tm t;
+      if (getLocalTime(&t, 5000)) {
+        Serial.printf("✅ [NTP] Masa sync: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
+        ntpSynced = true;
+      } else {
+        Serial.println("⚠️ [NTP] Masih gagal — akan cuba lagi.");
+      }
+    }
+  } else if (wifiStatus == WL_IDLE_STATUS) {
+    Serial.println("📶 WiFi sedang connecting... tunggu.");
   } else {
+    ntpSynced = false;
     digitalWrite(WIFI_LED_PIN, LOW);
+    Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
+    WiFi.disconnect(true);
+    delay(200);
     WiFi.begin(ssid, pass);
   }
 }

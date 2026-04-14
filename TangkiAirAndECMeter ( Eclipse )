@@ -5,8 +5,8 @@
 #define BLYNK_AUTH_TOKEN    "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
 
 /************ WIFI ************/
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "keren";
+char pass[] = "oooooooo";
 
 /************ PIN ************/
 #define FLOAT_PIN    4
@@ -136,16 +136,16 @@ void checkDailySchedule() {
     Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // 1. Stage 1: Connect to Blynk 5 minutes early (06:55)
-  if (timeinfo.tm_hour == 6 && timeinfo.tm_min == 55) {
+  // 1. Stage 1: Connect to Blynk at 07:00
+  if (timeinfo.tm_hour == 7 && timeinfo.tm_min == 0) {
     if (!Blynk.connected()) {
-      Serial.println("🌐 [SCHEDULE] Connecting to Blynk 5m early...");
+      Serial.println("🌐 [SCHEDULE] Connecting to Blynk for 7:05 slot...");
       Blynk.connect();
     }
   }
 
-  // 2. Stage 2: Publish and Disconnect at 07:00
-  if (timeinfo.tm_hour == 7 && timeinfo.tm_min == 0 && lastReportDay != timeinfo.tm_mday) {
+  // 2. Stage 2: Publish and Disconnect at 07:05
+  if (timeinfo.tm_hour == 7 && timeinfo.tm_min == 5 && lastReportDay != timeinfo.tm_mday) {
     sendDailyReport();
     lastReportDay = timeinfo.tm_mday;
   }

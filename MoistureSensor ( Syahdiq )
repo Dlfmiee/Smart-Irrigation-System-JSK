@@ -12,8 +12,8 @@
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 /************ WIFI ************/
-char ssid[] = "WiFi JSK";
-char pass[] = "vhwau35565";
+char ssid[] = "keren";
+char pass[] = "oooooooo";
 
 // Soil sensor pins
 #define SOIL1 34
@@ -52,20 +52,20 @@ bool shouldPublishToBlynk() {
   int minute = timeinfo->tm_min;
   int day = timeinfo->tm_yday;
   
-  // Stage 1: Connect 5m early (07:35 / 15:35)
-  bool isPrepTime = ( (hour == 7 && minute == 35) || (hour == 15 && minute == 35) );
-  if (isPrepTime && minute != lastPublishDay) { // temp misuse of day as latch, better to use minute latch
+  // Stage 1: Connect 5m early (07:26 / 15:26)
+  bool isPrepTime = ( (hour == 7 && minute == 26) || (hour == 15 && minute == 26) );
+  if (isPrepTime && minute != lastSentMinute) { 
      if (!Blynk.connected()) {
        Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
        Blynk.connect();
      }
   }
 
-  // Stage 2: Publish (07:40 / 15:40)
-  bool is7_40 = (hour == 7 && minute >= 40 && minute < 45);
-  bool is15_40 = (hour == 15 && minute >= 40 && minute < 45);
+  // Stage 2: Publish (07:31 / 15:31)
+  bool is7_31 = (hour == 7 && minute == 31);
+  bool is15_31 = (hour == 15 && minute == 31);
   
-  if ((is7_40 || is15_40) && day != lastPublishDay) {
+  if ((is7_31 || is15_31) && day != lastPublishDay) {
     lastPublishDay = day;
     return true;
   }
