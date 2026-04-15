@@ -208,8 +208,8 @@ void checkSchedule() {
     }
   }
 
-  // 3. 04:00 PM (16:00) - Process Execution
-  if (hour == 16 && minute == 0 && lastOpenHour != hour) {
+  // 3. 16:00 (04:00 PM) - Process Execution (5-minute window)
+  if (hour == 16 && (minute >= 0 && minute <= 5) && lastOpenHour != hour) {
     lastOpenHour = hour;
     if (envConditionOK && !leakDetected) {
       Serial.println("⏰ Schedule: 16:00 - STARTING (Staggered)");

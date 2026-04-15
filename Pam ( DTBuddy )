@@ -33,7 +33,7 @@ const char* CYBERSPARK_TOKEN = "CF9rSGv-iVZRN61N3ZZ90Vx96dMXEv6S";
 // Pins
 const int relayPin = 26; // Pump Relay
 const int ledPin   = 27; // Status LED
-const int wifiLedPin = 21; // Assuming GPIO 21 for LED from user snippets previously, but we'll stick to GPIO 2 if available. 
+const int wifiLedPin = 2; // Assuming GPIO 21 for LED from user snippets previously, but we'll stick to GPIO 2 if available. 
                           // Actually, user's snippet used wifiLedPin which wasn't defined. I'll define it as 2.
 
 // State Variables

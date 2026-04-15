@@ -79,30 +79,27 @@ void checkScheduledPublish() {
   int minute = timeinfo.tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  // Window: 07:12 to 07:27 and 15:12 to 15:27
   bool inWindow = ( (hour == 7 && minute >= 12 && minute <= 27) || 
                     (hour == 15 && minute >= 12 && minute <= 27) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
-    Serial.println("🛡️ [WATCHDOG] Armed for Sync Window.");
   } else if (!inWindow && wdtActive) {
     esp_task_wdt_delete(NULL);
     wdtActive = false;
-    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // Stage 1: Connect 5m early (06:55 / 14:55)
-  if (((hour == 6 && minute == 55) || (hour == 14 && minute == 55)) && minute != lastPublishHour) {
+  // Stage 1: Connect 5m early (07:07 / 15:07)
+  if (((hour == 7 && minute == 7) || (hour == 15 && minute == 7)) && minute != lastPublishHour) {
       Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
       Blynk.connect();
-      lastPublishHour = minute; // temporary latch
+      lastPublishHour = minute; 
   }
 
-  // Stage 2: Report and Disconnect (07:00 / 15:00)
-  if (((hour == 7 && minute == 0) || (hour == 15 && minute == 0)) && hour != lastPublishHour) {
-    lastPublishHour = hour; // final hour latch
+  // Stage 2: Report and Disconnect (07:15 / 15:15)
+  if (((hour == 7 && minute == 15) || (hour == 15 && minute == 15)) && hour != lastPublishHour) {
+    lastPublishHour = hour;
     
     Serial.println("📤 [STAGE 2] Reporting Rainfall sync...");
     if (!Blynk.connected()) Blynk.connect();
@@ -115,24 +112,22 @@ void checkScheduledPublish() {
 
     if (Blynk.connected()) {
       int rawRain = analogRead(RAIN_SENSOR_PIN);
+      int intuitiveRain = 4095 - rawRain; 
       float rainfall = tipCount * RAIN_PER_TIP;
-      bool isRaining = (millis() - lastTipTime < rainTimeout || rawRain < RAIN_THRESHOLD);
+      bool isRaining = (millis() - lastTipTime < rainTimeout || intuitiveRain > 2095);
       int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
 
       Blynk.virtualWrite(V8, rainfall);
-      Blynk.virtualWrite(V9, rawRain);
+      Blynk.virtualWrite(V9, intuitiveRain);
       Blynk.virtualWrite(V12, lockout);
       
       Blynk.run();
       delay(1000);
       Serial.println("✅ Sync Complete.");
-    } else {
-      Serial.println("⚠️ Sync FAILED — Token might be busy.");
     }
 
-    Blynk.disconnect(); // Always Release
+    Blynk.disconnect(); 
     Serial.println("💤 Disconnected from Blynk.");
-
     logToGoogleSheets();
   }
 }

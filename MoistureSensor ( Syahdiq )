@@ -34,8 +34,8 @@ int lastPublishDay = -1;  // Track last publish day to prevent duplicates
 
 /************ CONVERT TO % ************/
 int convertToPercentage(int value) {
-  // Calculate percentage based on 4095 (max ADC value for ESP32)
-  int percent = (value * 100) / 4095;
+  // Intuitive: 0% = Dry (4095), 100% = Wet (0)
+  int percent = map(value, 4095, 0, 0, 100);
 
   if (percent > 100) percent = 100;
   if (percent < 0) percent = 0;
@@ -120,18 +120,15 @@ void scheduledBlynkPublish() {
   int minute = timeinfo->tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  // Window: 07:37 to 07:45 and 15:37 to 15:45
   bool inWindow = ( (hour == 7 && minute >= 37 && minute <= 45) || 
                     (hour == 15 && minute >= 37 && minute <= 45) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
-    Serial.println("🛡️ [WATCHDOG] Armed for Reporting Window.");
   } else if (!inWindow && wdtActive) {
     esp_task_wdt_delete(NULL);
     wdtActive = false;
-    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
   if (shouldPublishToBlynk()) {
@@ -155,6 +152,30 @@ void scheduledBlynkPublish() {
 
     Blynk.disconnect(); // Failsafe
     Serial.println("💤 Disconnected from Blynk.");
+  }
+}
+
+void sendMoistureToBlynk() {
+  int v1 = analogRead(SOIL1);
+  int v2 = analogRead(SOIL2);
+  int v3 = analogRead(SOIL3);
+
+  int p1 = convertToPercentage(v1);
+  int p2 = convertToPercentage(v2);
+  int p3 = convertToPercentage(v3);
+
+  int avgPercent = (p1 + p2 + p3) / 3;
+
+  if (abs(avgPercent - lastSoilAvg) > 2) {
+    Blynk.virtualWrite(V7, avgPercent);
+    lastSoilAvg = avgPercent;
+  }
+
+  // Rain lockout: Only trigger if soil is very wet (>85%)
+  if (avgPercent > 85) {
+    Blynk.virtualWrite(V12, 1);
+  } else {
+    Blynk.virtualWrite(V12, 0); 
   }
 }
 
@@ -190,10 +211,14 @@ void sendMoistureToBlynk() {
     Serial.println("[DELTA] No change, skipping Blynk.");
   }
 
-  // Rain lockout
-  if (avgRaw < wetThreshold) {
+  // Rain lockout: Only trigger if soil is very wet (>85%)
+  if (avgPercent > 85) {
     Blynk.virtualWrite(V12, 1);
-    Serial.println("Soil extremely wet! Rain Lockout ON.");
+    Serial.println("Soil saturated (>85%)! Rain Lockout ON.");
+  } else {
+    // Automatically turn OFF lockout when soil dries up
+    Blynk.virtualWrite(V12, 0); 
+    Serial.println("Soil moisture OK. Rain Lockout OFF.");
   }
 }
 
