@@ -12,8 +12,8 @@
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 /************ WIFI ************/
-char ssid[] = "keren";
-char pass[] = "oooooooo";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 // Soil sensor pins
 #define SOIL1 34
@@ -30,12 +30,13 @@ bool soil3Dry;
 
 BlynkTimer timer;
 int lastSoilAvg = -1;
-int lastPublishDay = -1;  // Track last publish day to prevent duplicates
+int lastPublishDay = -1;  
+int lastSentMinute = -1;  // Track last prep minute
 
 /************ CONVERT TO % ************/
 int convertToPercentage(int value) {
-  // Intuitive: 0% = Dry (4095), 100% = Wet (0)
-  int percent = map(value, 4095, 0, 0, 100);
+  // Logic: 0 = Dry (0%), 4095 = Wet (100%)
+  int percent = map(value, 0, 4095, 0, 100);
 
   if (percent > 100) percent = 100;
   if (percent < 0) percent = 0;
@@ -55,6 +56,7 @@ bool shouldPublishToBlynk() {
   // Stage 1: Connect 5m early (07:26 / 15:26)
   bool isPrepTime = ( (hour == 7 && minute == 26) || (hour == 15 && minute == 26) );
   if (isPrepTime && minute != lastSentMinute) { 
+    lastSentMinute = minute; 
      if (!Blynk.connected()) {
        Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
        Blynk.connect();
@@ -101,13 +103,24 @@ void monitorSensors() {
   int p2 = convertToPercentage(v2);
   int p3 = convertToPercentage(v3);
 
-  Serial.print("[RAW] S1: "); Serial.print(v1);
-  Serial.print(" | S2: "); Serial.print(v2);
-  Serial.print(" | S3: "); Serial.print(v3);
-  Serial.print(" | [%] S1: "); Serial.print(p1);
-  Serial.print("% | S2: "); Serial.print(p2);
-  Serial.print("% | S3: "); Serial.print(p3);
-  Serial.println("%");
+  // Monitor sensors (serial only)
+  Serial.print("."); 
+}
+
+/************ CHECK WIFI RECONNECTION ************/
+void checkWiFi() {
+  wl_status_t wifiStatus = WiFi.status();
+
+  if (wifiStatus == WL_CONNECTED) {
+    // WiFi is good
+  } else if (wifiStatus == WL_IDLE_STATUS) {
+    Serial.println("📶 WiFi sedang connecting... tunggu.");
+  } else {
+    Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
+    WiFi.disconnect(true);
+    delay(200);
+    WiFi.begin(ssid, pass);
+  }
 }
 
 bool wdtActive = false;
@@ -152,30 +165,6 @@ void scheduledBlynkPublish() {
 
     Blynk.disconnect(); // Failsafe
     Serial.println("💤 Disconnected from Blynk.");
-  }
-}
-
-void sendMoistureToBlynk() {
-  int v1 = analogRead(SOIL1);
-  int v2 = analogRead(SOIL2);
-  int v3 = analogRead(SOIL3);
-
-  int p1 = convertToPercentage(v1);
-  int p2 = convertToPercentage(v2);
-  int p3 = convertToPercentage(v3);
-
-  int avgPercent = (p1 + p2 + p3) / 3;
-
-  if (abs(avgPercent - lastSoilAvg) > 2) {
-    Blynk.virtualWrite(V7, avgPercent);
-    lastSoilAvg = avgPercent;
-  }
-
-  // Rain lockout: Only trigger if soil is very wet (>85%)
-  if (avgPercent > 85) {
-    Blynk.virtualWrite(V12, 1);
-  } else {
-    Blynk.virtualWrite(V12, 0); 
   }
 }
 
@@ -308,8 +297,9 @@ void setup() {
   esp_task_wdt_reconfigure(&twdt_config);
   // esp_task_wdt_add(NULL); -> Moved to dynamic window in scheduledBlynkPublish()
 
-  timer.setInterval(5000L, monitorSensors);  // Read and display sensor data every 5 seconds (serial monitor only)
-  timer.setInterval(10000L, checkConnections);  // Check WiFi and Blynk connection every 10 seconds
+  timer.setInterval(30000L, monitorSensors); // Read every 30s instead of 5s to save power
+  timer.setInterval(30000L, checkWiFi);         // Robust WiFi reconnection every 30s
+  timer.setInterval(10000L, checkConnections);  // Check WiFi and Blynk status every 10s
   timer.setInterval(60000L, scheduledBlynkPublish);  // Check every minute if it's time to publish to Blynk
   timer.setInterval(300000L, logToGoogleSheets);
 }

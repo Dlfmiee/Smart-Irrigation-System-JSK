@@ -5,8 +5,8 @@
 #define BLYNK_AUTH_TOKEN    "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
 
 /************ WIFI ************/
-char ssid[] = "keren";
-char pass[] = "oooooooo";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 /************ PIN ************/
 #define FLOAT_PIN    4
@@ -186,8 +186,7 @@ void checkWiFi() {
     ntpSynced = false;  // Reset flag — perlu sync semula bila reconnect
     digitalWrite(WIFI_LED_PIN, LOW);
     Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
-    WiFi.disconnect(true);
-    delay(200);
+    // Remove aggressive disconnect(true)
     WiFi.begin(ssid, pass);
   }
 }
@@ -207,6 +206,7 @@ void setup() {
   // ✅ BAIKI #6 — WiFi dengan feedback
   Serial.print("[WIFI] Connecting to: ");
   Serial.println(ssid);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
 
   int attempts = 0;

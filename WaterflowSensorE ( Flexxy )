@@ -11,8 +11,8 @@
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-char ssid[] = "keren";
-char pass[] = "oooooooo";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 #define FLOW_SENSOR_PIN 27
 #define WIFI_LED_PIN 2  // Built-in Blue LED: ON = WiFi connected, OFF = disconnected
@@ -131,8 +131,7 @@ void checkWiFi() {
     ntpSynced = false;
     digitalWrite(WIFI_LED_PIN, LOW);
     Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
-    WiFi.disconnect(true);
-    delay(200);
+    // Remove aggressive disconnect(true)
     WiFi.begin(ssid, pass);
   }
 }
@@ -224,6 +223,7 @@ void setup() {
 
   pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, FALLING);
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
 

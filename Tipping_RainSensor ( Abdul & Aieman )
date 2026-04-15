@@ -13,11 +13,11 @@
   Tipping Rain Sensor (Abdul & Aieman)
   - Uses SHARED AUTH TOKEN with Pump (MbA2... )
   - Reports Rainfall (V8) and Lockout (V12)
-  - Schedule: Only communicates at 07:30 AM and 03:30 PM
+  - Schedule: Only communicates at 07:25 AM and 03:25 PM
 */
 
-char ssid[] = "keren";
-char pass[] = "oooooooo";
+char ssid[] = "WiFi JSK";
+char pass[] = "vhwau35565";
 
 // --- EXTERNAL LINKS ---
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
@@ -79,8 +79,8 @@ void checkScheduledPublish() {
   int minute = timeinfo.tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  bool inWindow = ( (hour == 7 && minute >= 12 && minute <= 27) || 
-                    (hour == 15 && minute >= 12 && minute <= 27) );
+  bool inWindow = ( (hour == 7 && minute >= 22 && minute <= 37) || 
+                    (hour == 15 && minute >= 22 && minute <= 37) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
@@ -90,15 +90,15 @@ void checkScheduledPublish() {
     wdtActive = false;
   }
 
-  // Stage 1: Connect 5m early (07:07 / 15:07)
-  if (((hour == 7 && minute == 7) || (hour == 15 && minute == 7)) && minute != lastPublishHour) {
-      Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
+  // Stage 1: Connect 8m early (07:17 / 15:17)
+  if (((hour == 7 && minute == 17) || (hour == 15 && minute == 17)) && minute != lastPublishHour) {
+      Serial.println("🌐 [STAGE 1] Connecting to Blynk 8m early...");
       Blynk.connect();
       lastPublishHour = minute; 
   }
 
-  // Stage 2: Report and Disconnect (07:15 / 15:15)
-  if (((hour == 7 && minute == 15) || (hour == 15 && minute == 15)) && hour != lastPublishHour) {
+  // Stage 2: Report and Disconnect (07:25 / 15:25)
+  if (((hour == 7 && minute == 25) || (hour == 15 && minute == 25)) && hour != lastPublishHour) {
     lastPublishHour = hour;
     
     Serial.println("📤 [STAGE 2] Reporting Rainfall sync...");
@@ -198,8 +198,7 @@ void checkSystem() {
     ntpSynced = false;
     digitalWrite(WIFI_LED_PIN, LOW);
     Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
-    WiFi.disconnect(true);
-    delay(200);
+    // Remove aggressive disconnect(true)
     WiFi.begin(ssid, pass);
   }
 }
@@ -212,9 +211,12 @@ void setup() {
   pinMode(RAIN_SENSOR_PIN, INPUT);
   pinMode(WIFI_LED_PIN, OUTPUT);
 
+  Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
+  
   Blynk.config(BLYNK_AUTH_TOKEN);
-  configTime(28800, 0, "pool.ntp.org");
+  configTime(28800, 0, "pool.ntp.org", "time.google.com");
 
   esp_task_wdt_config_t wdt_config = {
     .timeout_ms = 300000, .idle_core_mask = 0, .trigger_panic = true

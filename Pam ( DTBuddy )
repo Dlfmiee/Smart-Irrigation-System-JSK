@@ -8,9 +8,9 @@
   Logic: Continuous Status Sync (Pulse) + Robust Connectivity
 */
 
-#define BLYNK_TEMPLATE_ID   "TMPL67aY-VULb"
+#define BLYNK_TEMPLATE_ID   "TMPL6AgU8jm-x"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "MbA2y5hlAv4SpJ7-a-y9CDhSH9d2zfyd"
+#define BLYNK_AUTH_TOKEN    "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
@@ -20,8 +20,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "keren";
-const char* pass = "oooooooo";
+const char* ssid = "WiFi JSK";
+const char* pass = "vhwau35565";
 
 // Google Sheets Log
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
@@ -33,8 +33,7 @@ const char* CYBERSPARK_TOKEN = "CF9rSGv-iVZRN61N3ZZ90Vx96dMXEv6S";
 // Pins
 const int relayPin = 26; // Pump Relay
 const int ledPin   = 27; // Status LED
-const int wifiLedPin = 2; // Assuming GPIO 21 for LED from user snippets previously, but we'll stick to GPIO 2 if available. 
-                          // Actually, user's snippet used wifiLedPin which wasn't defined. I'll define it as 2.
+const int wifiLedPin = 2; // Dedicate GPIO 2 for WiFi Status
 
 // State Variables
 bool pumpRunning = false;
@@ -57,6 +56,7 @@ BlynkTimer timer;
 void startPump() {
   if (pumpRunning || pumpError) return;
   digitalWrite(relayPin, HIGH); // Active HIGH
+  digitalWrite(ledPin, LOW);    // LED OFF when Relay ON
   pumpRunning = true;
   pumpStartTime = millis();
   Blynk.virtualWrite(V1, 1);
@@ -65,8 +65,12 @@ void startPump() {
 }
 
 void stopPump() {
-  if (!pumpRunning) return;
+  if (!pumpRunning) {
+    digitalWrite(ledPin, HIGH); // Ensure LED is ON when stopped
+    return;
+  }
   digitalWrite(relayPin, LOW);
+  digitalWrite(ledPin, HIGH);   // LED ON when Relay OFF
   pumpRunning = false;
   Blynk.virtualWrite(V1, 0);
   Blynk.virtualWrite(V11, 0); // Status Indicator
@@ -234,15 +238,12 @@ void checkWiFi() {
   wl_status_t wifiStatus = WiFi.status();
 
   if (wifiStatus == WL_CONNECTED) {
-    digitalWrite(ledPin, HIGH);
+    digitalWrite(wifiLedPin, HIGH);
   } else if (wifiStatus == WL_IDLE_STATUS) {
-    // Masih dalam proses connecting — JANGAN interrupt!
     Serial.println("[WIFI] Sedang connecting... tunggu.");
   } else {
-    digitalWrite(ledPin, LOW);
+    digitalWrite(wifiLedPin, LOW);
     Serial.printf("[WIFI] Lost (status=%d) — reconnecting...\n", wifiStatus);
-    WiFi.disconnect(true);
-    delay(200);
     WiFi.begin(ssid, pass);
   }
 }
@@ -256,10 +257,12 @@ void setup() {
 
   pinMode(relayPin, OUTPUT);
   pinMode(ledPin, OUTPUT);
+  pinMode(wifiLedPin, OUTPUT);
 
   stopPump();
 
   Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
+  WiFi.mode(WIFI_STA); 
   WiFi.begin(ssid, pass);
 
   int wifiAttempts = 0;
@@ -301,8 +304,11 @@ void setup() {
 void loop() {
   if (Blynk.connected()) {
     Blynk.run();
-  } else {
-    Blynk.connect();
+  } else if (WiFi.status() == WL_CONNECTED) {
+    if (millis() % 15000 < 100) { // Simple non-blocking attempt every 15s
+      Blynk.connect();
+    }
   }
   timer.run();
   if (wdtActive) esp_task_wdt_reset();
+}

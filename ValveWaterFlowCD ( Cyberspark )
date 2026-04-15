@@ -20,8 +20,8 @@
 #include <esp_task_wdt.h>
 
 // WiFi
-const char* ssid = "keren";
-const char* pass = "oooooooo";
+const char* ssid = "WiFi JSK";
+const char* pass = "vhwau35565";
 
 // Bridge to Master Pump
 const char* MASTER_PUMP_TOKEN = "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-";
@@ -244,8 +244,7 @@ void checkWiFi() {
   } else {
     digitalWrite(WIFI_LED_PIN, LOW);
     Serial.printf("[WIFI] Lost (status=%d) — reconnecting...\n", wifiStatus);
-    WiFi.disconnect(true);
-    delay(200);
+    // Remove disconnect(true) to allow slow connections to finish
     WiFi.begin(ssid, pass);
   }
 }
@@ -267,6 +266,7 @@ void setup() {
   digitalWrite(WIFI_LED_PIN, LOW);
 
   Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, pass);
   
   // Robust WiFi Wait
