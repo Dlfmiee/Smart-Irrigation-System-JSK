@@ -56,7 +56,7 @@ BlynkTimer timer;
 void startPump() {
   if (pumpRunning || pumpError) return;
   digitalWrite(relayPin, HIGH); // Active HIGH
-  digitalWrite(ledPin, LOW);    // LED OFF when Relay ON
+  digitalWrite(ledPin, HIGH);   // LED ON when Relay ON
   pumpRunning = true;
   pumpStartTime = millis();
   Blynk.virtualWrite(V1, 1);
@@ -66,11 +66,11 @@ void startPump() {
 
 void stopPump() {
   if (!pumpRunning) {
-    digitalWrite(ledPin, HIGH); // Ensure LED is ON when stopped
+    digitalWrite(ledPin, LOW); // Ensure LED is OFF when stopped
     return;
   }
   digitalWrite(relayPin, LOW);
-  digitalWrite(ledPin, HIGH);   // LED ON when Relay OFF
+  digitalWrite(ledPin, LOW);    // LED OFF when Relay OFF
   pumpRunning = false;
   Blynk.virtualWrite(V1, 0);
   Blynk.virtualWrite(V11, 0); // Status Indicator
