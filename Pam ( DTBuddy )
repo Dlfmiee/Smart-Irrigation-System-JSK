@@ -94,7 +94,6 @@ bool wdtActive = false;
 void evaluatePumpState() {
   // Update indicator only on change to save Blynk messages
   if (pumpRunning != lastPumpRunning) {
-    Blynk.virtualWrite(V11, pumpRunning ? 1 : 0);
     lastPumpRunning = pumpRunning;
   }
 
@@ -313,7 +312,7 @@ void setup() {
 
   timer.setInterval(5000L, evaluatePumpState);      // Balanced evaluation (5s)
   timer.setInterval(10000L, checkWiFi);             // WiFi stabilizer
-  timer.setInterval(30000L, fetchRemoteValveStatus); // Independent Pulse Sync (30s)
+  timer.setInterval(60000L, fetchRemoteValveStatus); // Independent Pulse Sync (60s to prevent spam)
   timer.setInterval(300000L, logToGoogleSheets);   // Google Sheets Log (5m)
 
   Serial.println("[SYSTEM] Pump Node Ready (B/D Focused Sync)");
