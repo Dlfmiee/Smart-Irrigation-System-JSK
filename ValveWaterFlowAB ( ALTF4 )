@@ -24,7 +24,8 @@ const char* ssid = "WiFi JSK";
 const char* pass = "vhwau35565";
 
 // Bridge to Master Pump
-const char* MASTER_PUMP_TOKEN = "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-";
+const char* MASTER_PUMP_TOKEN = "eH9Lhet9x07gktcVE0WDb86JoqQD0Cj4";
+const char* SENSOR_TOKEN      = "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-";
 
 // --- PIN DEFINITIONS ---
 #define RELAY_A_PIN 14
@@ -79,17 +80,17 @@ void fetchGlobalData() {
   client.setInsecure();
   HTTPClient http;
   
-  String urlV7 = "https://blynk.cloud/external/api/get?token=" + String(MASTER_PUMP_TOKEN) + "&V7";
+  String urlV7 = "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V7";
   http.begin(client, urlV7);
   if (http.GET() > 0) envMoisture = http.getString().toInt();
   http.end();
   
-  String urlV12 = "https://blynk.cloud/external/api/get?token=" + String(MASTER_PUMP_TOKEN) + "&V12";
+  String urlV12 = "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V12";
   http.begin(client, urlV12);
   if (http.GET() > 0) envRain = (http.getString().toInt() == 1);
   http.end();
   
-  String urlV0 = "https://blynk.cloud/external/api/get?token=" + String(MASTER_PUMP_TOKEN) + "&V0";
+  String urlV0 = "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V0";
   http.begin(client, urlV0);
   if (http.GET() > 0) envFlow = http.getString().toFloat();
   http.end();

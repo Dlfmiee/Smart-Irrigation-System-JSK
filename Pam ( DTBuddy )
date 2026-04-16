@@ -10,7 +10,7 @@
 
 #define BLYNK_TEMPLATE_ID   "TMPL6AgU8jm-x"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
-#define BLYNK_AUTH_TOKEN    "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
+#define BLYNK_AUTH_TOKEN    "eH9Lhet9x07gktcVE0WDb86JoqQD0Cj4"
 #define BLYNK_PRINT Serial
 
 #include <WiFi.h>
@@ -27,8 +27,9 @@ const char* pass = "vhwau35565";
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
 // Remote Device Tokens
-const char* ALTF4_TOKEN      = "JM9P4q32gJOpSwRtCuwPiQ6iY_IwCGPj";
-const char* CYBERSPARK_TOKEN = "CF9rSGv-iVZRN61N3ZZ90Vx96dMXEv6S";
+const char* ALTF4_TOKEN      = "F3odZsHMu3LRquCQc0p-FNfc7brVvryt";
+const char* CYBERSPARK_TOKEN = "AYex-Uv5lo5RZMcR9FDMCqGbA2k-d4U-";
+const char* SENSOR_TOKEN     = "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-";
 
 // Pins
 const int relayPin = 26; // Pump Relay
@@ -182,10 +183,27 @@ String urlB = "https://blynk.cloud/external/api/get?token=" + String(ALTF4_TOKEN
   if (http.GET() > 0) v4_open = (http.getString().toInt() == 1);
   http.end();
 
+  // 3. Fetch Sensors (Shared Token)
+  String urlV7 = "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V7";
+  http.begin(client, urlV7);
+  // Moisture monitored but handled in logic
+  http.end();
+
+  String urlV12 = "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V12";
+  http.begin(client, urlV12);
+  if (http.GET() > 0) rainLockout = (http.getString().toInt() == 1);
+  http.end();
+
+  String urlV0 = "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V0";
+  http.begin(client, urlV0);
+  if (http.GET() > 0) flowE = http.getString().toFloat();
+  http.end();
+
   Serial.print("[SYNC] A:"); Serial.print(v5_open);
   Serial.print(" B:"); Serial.print(v6_open);
   Serial.print(" C:"); Serial.print(v3_open);
-  Serial.print(" D:"); Serial.println(v4_open);
+  Serial.print(" D:"); Serial.print(v4_open);
+  Serial.print(" | R:"); Serial.println(rainLockout);
 }
 
 // ================== BLYNK HANDLERS ==================

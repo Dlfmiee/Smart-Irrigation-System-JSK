@@ -22,7 +22,7 @@ volatile int pulseCount = 0;
 float flowRate = 0;
 float lastFlowRate = -1; 
 volatile unsigned long lastPulseTime = 0; 
-
+bool wdtActive = false; // Global watchdog state
 BlynkTimer timer;
 int lastReportDay = -1;
 int lastReportSlot = -1;
@@ -39,8 +39,8 @@ void sendFlowRate() {
   pulseCount = 0;
   interrupts();
 
-  // Calculation for 2-second interval:
-  float flow_L_per_min = (count / 7.5) * 30.0; 
+  // Calculation for 5-second interval:
+  float flow_L_per_min = (count / 7.5) * 12.0; 
   flowRate = flow_L_per_min / 60.0;  // Convert to L/sec
 
   time_t now = time(nullptr);
@@ -48,46 +48,51 @@ void sendFlowRate() {
   int hour = timeinfo->tm_hour;
   int minute = timeinfo->tm_min;
 
-  Serial.print("[FLOW] Pulses: ");
-  Serial.print(count);
-  Serial.print(" | Rate: ");
+  Serial.print("[FLOW] Rate: ");
   Serial.print(flowRate, 3);
   Serial.println(" L/sec");
 
-  // Exact Target Slots: First (Leak Check T-2), Mid Check, Final Reset
-  bool isTargetSlot = ((hour == 7 && minute == 58) ||
-                       (hour == 8 && minute == 15) ||
-                       (hour == 15 && minute == 58) ||
-                       (hour == 16 && minute == 15));
-                       
-  bool isResetSlot = ((hour == 8 && minute == 31) ||
-                      (hour == 16 && minute == 31));
+  // Define Windows (Starts 5m before process, ends 1m after)
+  bool inMorningWindow = (hour == 7 && minute >= 55) || (hour == 8 && minute <= 31);
+  bool inAfternoonWindow = (hour == 15 && minute >= 55) || (hour == 16 && minute <= 31);
+  bool inActiveWindow = inMorningWindow || inAfternoonWindow;
 
-  if (isTargetSlot || (isResetSlot && lastFlowRate > 0)) {
-    if (minute != lastSentMinute) {
-      Serial.println("📤 [SNAPSHOT] Connecting for flow sync...");
+  // --- WINDOWED WATCHDOG LOGIC ---
+  if (inActiveWindow && !wdtActive) {
+    esp_task_wdt_add(NULL);
+    wdtActive = true;
+    Serial.println("🛡️ [WATCHDOG] Armed for Irrigation Window.");
+  } else if (!inActiveWindow && wdtActive) {
+    esp_task_wdt_delete(NULL);
+    wdtActive = false;
+    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+  }
+
+  if (inActiveWindow) {
+    static unsigned long lastBlynkPublish = 0;
+    
+    // Connect if not connected during window
+    if (!Blynk.connected()) {
+      Serial.println("🌐 [WINDOW] Opening Blynk connection for active monitoring...");
       Blynk.connect();
-      unsigned long start = millis();
-      while (!Blynk.connected() && millis() - start < 10000) {
-        Blynk.run();
-        delay(100);
-      }
+    }
 
+    // Publish every 30 seconds
+    if (millis() - lastBlynkPublish >= 30000) {
       if (Blynk.connected()) {
-        float valToSend = isTargetSlot ? flowRate : 0;
-        Blynk.virtualWrite(V0, valToSend);
-        Blynk.run();
-        delay(1000);
-        
-        lastSentMinute = minute;
-        lastFlowRate = valToSend;
-        Serial.println(isTargetSlot ? "✅ Snapshot Sent." : "✅ Final 0-Reset Sent.");
-      } else {
-        Serial.println("⚠️ Snapshot FAILED — Token might be busy.");
+        Blynk.virtualWrite(V0, flowRate);
+        Serial.println("📤 [LIVE] Flow data sent (30s interval)");
+        lastBlynkPublish = millis();
       }
-
-      Blynk.disconnect(); // Failsafe
-      Serial.println("💤 Disconnected from Blynk.");
+    }
+  } else {
+    // Outside window - Ensure we are disconnected
+    if (Blynk.connected()) {
+      Serial.println("💤 [WINDOW END] Sending final reset and disconnecting...");
+      Blynk.virtualWrite(V0, 0); // Failsafe reset
+      Blynk.run();
+      delay(500);
+      Blynk.disconnect();
     }
   }
 }
@@ -136,76 +141,8 @@ void checkWiFi() {
   }
 }
 
-bool wdtActive = false;
-
 void checkSchedule() {
-  time_t now = time(nullptr);
-  struct tm* timeinfo = localtime(&now);
-  
-  int hour = timeinfo->tm_hour;
-  int minute = timeinfo->tm_min;
-  int day = timeinfo->tm_yday;
-
-  // --- WINDOWED WATCHDOG LOGIC ---
-  // Window: 07:02 to 08:35 AND 15:02 to 16:35
-  bool inMorningWindow = (hour == 7 && minute >= 2) || (hour == 8 && minute <= 35);
-  bool inAfternoonWindow = (hour == 15 && minute >= 2) || (hour == 16 && minute <= 35);
-  bool inWindow = inMorningWindow || inAfternoonWindow;
-
-  if (inWindow && !wdtActive) {
-    esp_task_wdt_add(NULL);
-    wdtActive = true;
-    Serial.println("🛡️ [WATCHDOG] Armed for Irrigation Window.");
-  } else if (!inWindow && wdtActive) {
-    esp_task_wdt_delete(NULL);
-    wdtActive = false;
-    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
-  }
-
-  // --- TWO-STAGE CONNECTION LOGIC ---
-  int prepSlot = -1;
-  if (hour == 7 && minute == 53) prepSlot = 0;
-  else if (hour == 15 && minute == 53) prepSlot = 1;
-
-  int workSlot = -1;
-  if (hour == 7 && minute == 58) workSlot = 0;
-  else if (hour == 15 && minute == 58) workSlot = 1;
-
-  // Stage 1: Connect 5m early
-  if (prepSlot != -1 && minute != lastSentMinute) {
-    Serial.println("🌐 [STAGE 1] Connecting to Blynk 5m early...");
-    Blynk.connect();
-    lastSentMinute = minute; // latch
-  }
-
-  // Stage 2: Report and Disconnect
-  if (workSlot != -1 && (day != lastReportDay || workSlot != lastReportSlot)) {
-    Serial.printf("📢 [STAGE 2] Reporting Waterflow E at %02d:%02d\n", hour, minute);
-    
-    // Ensure we are connected
-    if (!Blynk.connected()) Blynk.connect();
-    unsigned long start = millis();
-    while (!Blynk.connected() && millis() - start < 10000) {
-      Blynk.run();
-      delay(100);
-    }
-
-    if (Blynk.connected()) {
-      Blynk.virtualWrite(V0, flowRate);
-      Blynk.run();
-      delay(1000);
-      Serial.println("✅ Scheduled report sent.");
-    } else {
-      Serial.println("⚠️ Report FAILED — Token might be busy.");
-    }
-    
-    Blynk.disconnect(); // Always Release
-    Serial.println("💤 Disconnected from Blynk.");
-    
-    logToGoogleSheets();
-    lastReportDay = day;
-    lastReportSlot = workSlot;
-  }
+  // Logic moved to sendFlowRate for tighter integration
 }
 
 void setup() {
