@@ -178,52 +178,28 @@ void checkSchedule() {
     Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
   }
 
-  // 1. T-27 Mins (15:33): Fetch Environment Data
-  if (hour == 15 && minute == 33 && lastCheckHour != hour) {
-    Serial.println("📢 T-30 [Cyberspark]: Fetching Sensor Data...");
-    fetchGlobalData();
-    lastCheckHour = hour;
-    if (envRain) {
-      envConditionOK = false;
-      Serial.println("⚠️ Pre-check FAIL: Rain Lockout active.");
-    } else if (envMoisture >= 80) {
-      envConditionOK = false;
-      Serial.println("⚠️ Pre-check FAIL: Soil is too wet.");
-    } else {
-      envConditionOK = true;
-      Serial.println("✅ Pre-check PASS: Conditions OK.");
-    }
-  }
-
-  // 2. T-30 Secs (15:59): Fetch Flow for Leak Check
-  if (hour == 15 && minute == 59 && lastLeakCheckHour != hour) {
-    Serial.println("📢 T-30s [Cyberspark]: Fetching Flow for Leak Check...");
-    fetchGlobalData(); // refresh
-    lastLeakCheckHour = hour;
-    if (envFlow > 0.05) {
-      leakDetected = true;
-      Serial.println("🚨 Leak Check FAIL: Flow detected before opening!");
-    } else {
-      leakDetected = false;
-      Serial.println("✅ Leak Check PASS: No flow detected.");
-    }
-  }
-
-  // 3. 16:00 (04:00 PM) - Process Execution (5-minute window)
+  // 1. 16:00 (04:00 PM) - Process Execution (5-minute window)
   if (hour == 16 && (minute >= 0 && minute <= 5) && lastOpenHour != hour) {
     lastOpenHour = hour;
-    if (envConditionOK && !leakDetected) {
-      Serial.println("⏰ Schedule: 16:00 - STARTING (Staggered)");
+    
+    Serial.println("📢 16:00 [Cyberspark]: Fetching Sensor Data for Schedule...");
+    fetchGlobalData(); // Fetch right now to get exact, real-time status!
+    
+    // Evaluate conditions immediately
+    if (envRain) {
+      Serial.println("🚫 Schedule: 16:00 - SKIPPED. Reason: RAIN");
+    } else if (envMoisture >= 80) {
+      Serial.println("🚫 Schedule: 16:00 - SKIPPED. Reason: WET SOIL");
+    } else if (envFlow > 0.05) {
+      Serial.println("🚨 Schedule: 16:00 - SKIPPED. Reason: FLOW LEAK DETECTED");
+    } else {
+      Serial.println("✅ Conditions OK! ⏰ Schedule: 16:00 - STARTING (Staggered)");
       openValveC();
       timer.setTimeout(7000L, openValveD);
-    } else {
-      String reason = leakDetected ? "LEAK" : (envRain ? "RAIN" : "WET SOIL");
-      Serial.print("🚫 Schedule: 16:00 - SKIPPED. Reason: ");
-      Serial.println(reason);
     }
   }
 
-  // 4. 04:30 PM (16:30) - Close staggered
+  // 2. 04:30 PM (16:30) - Close staggered
   if (hour == 16 && minute == 30 && lastCloseHour != hour) {
     Serial.println("⏰ Schedule: 16:30 - Closing Valve C (D follows in 7s)");
     closeValveC();
