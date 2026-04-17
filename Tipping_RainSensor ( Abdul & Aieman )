@@ -9,232 +9,102 @@
 #include <time.h>
 #include <esp_task_wdt.h>
 
-/* 
-  Tipping Rain Sensor (Abdul & Aieman)
-  - Uses SHARED AUTH TOKEN with Pump (MbA2... )
-  - Reports Rainfall (V8) and Lockout (V12)
-  - Schedule: Only communicates at 07:25 AM and 03:25 PM
-*/
-
 char ssid[] = "WiFi JSK";
 char pass[] = "vhwau35565";
-
-// --- EXTERNAL LINKS ---
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
 
-// --- PIN DEFINITIONS ---
-#define REED_PIN 32         // Tipping Bucket Reed Switch
-#define RAIN_SENSOR_PIN 34  // Analog Rain Probe
-#define WIFI_LED_PIN 2      // Built-in LED
+#define REED_PIN 32         
+#define RAIN_SENSOR_PIN 34  
+#define WIFI_LED_PIN 2      
 
-// --- CONSTANTS ---
-const float RAIN_PER_TIP = 0.2;     // 0.2mm per tip
-const int RAIN_THRESHOLD = 2000;   // Analog threshold (Lower = Wetter)
-const float LOCKOUT_THRESHOLD = 5.0; // Daily rain limit (mm)
-const unsigned long rainTimeout = 10000; // 10s sensor window
+const float RAIN_PER_TIP = 0.2;     
+const float LOCKOUT_THRESHOLD = 5.0; 
+const unsigned long rainTimeout = 10000; 
 
-// --- GLOBAL VARIABLES ---
-volatile unsigned long tipCount = 0;
-volatile unsigned long lastDebounceTime = 0;
-const unsigned long debounceDelay = 50;
-
-unsigned long lastTipTime = 0;
+volatile uint32_t tipCount = 0;
+volatile uint32_t lastDebounce = 0;
+uint32_t lastTipTime = 0;
 int lastResetDay = -1;
-int lastPublishHour = -1;
-
+int lastPublishH = -1;
+bool ntpSynced = false;
+bool wdtActive = false;
 BlynkTimer timer;
 
-// ================== INTERRUPT ==================
 void IRAM_ATTR handleTip() {
-  unsigned long now = millis();
-  if (now - lastDebounceTime > debounceDelay) {
-    tipCount++;
-    lastDebounceTime = now;
-    lastTipTime = now;
-  }
+  uint32_t now = millis();
+  if (now - lastDebounce > 50) { tipCount++; lastDebounce = now; lastTipTime = now; }
 }
 
-// ================== LOGGING ==================
-void logToGoogleSheets() {
+void updateBlynkSilent(String params) {
   if (WiFi.status() != WL_CONNECTED) return;
-  float rainfall = tipCount * RAIN_PER_TIP;
-  WiFiClientSecure client;
-  client.setInsecure();
+  WiFiClientSecure client; client.setInsecure();
   HTTPClient http;
-  String url = String(googleScriptUrl) + "?rainfall=" + String(rainfall, 2);
-  http.begin(client, url);
-  http.GET();
-  http.end();
-  Serial.println("[LOG] Google Sheets updated.");
+  String url = "https://blynk.cloud/external/api/update?token=" + String(BLYNK_AUTH_TOKEN) + "&" + params;
+  http.begin(client, url); http.GET(); http.end();
 }
 
-// ================== SCHEDULED TRANSMISSION ==================
-bool wdtActive = false;
-
-void checkScheduledPublish() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) return;
-
-  int hour = timeinfo.tm_hour;
-  int minute = timeinfo.tm_min;
-
-  // --- WINDOWED WATCHDOG LOGIC ---
-  // WDT MUST arm before Stage 1 connection (Starts minute 15, ends minute 30)
-  bool inWindow = ( (hour == 7 && minute >= 15 && minute <= 30) || 
-                    (hour == 15 && minute >= 15 && minute <= 30) );
-
-  if (inWindow && !wdtActive) {
-    esp_task_wdt_add(NULL);
-    wdtActive = true;
-  } else if (!inWindow && wdtActive) {
-    esp_task_wdt_delete(NULL);
-    wdtActive = false;
-  }
-
-  // Stage 1: Connect 8m early (07:17 / 15:17)
-  if (((hour == 7 && minute == 17) || (hour == 15 && minute == 17)) && minute != lastPublishHour) {
-      Serial.println("🌐 [STAGE 1] Connecting to Blynk 8m early...");
-      Blynk.connect();
-      lastPublishHour = minute; 
-  }
-
-  // Stage 2: Report and Disconnect (07:25 / 15:25)
-  if (((hour == 7 && minute == 25) || (hour == 15 && minute == 25)) && hour != lastPublishHour) {
-    lastPublishHour = hour;
-    
-    Serial.println("📤 [STAGE 2] Reporting Rainfall sync...");
-    if (!Blynk.connected()) Blynk.connect();
-    
-    unsigned long start = millis();
-    while (!Blynk.connected() && millis() - start < 10000) {
-      Blynk.run();
-      delay(100);
-    }
-
-    if (Blynk.connected()) {
-      int rawRain = analogRead(RAIN_SENSOR_PIN);
-      int intuitiveRain = 4095 - rawRain; 
-      float rainfall = tipCount * RAIN_PER_TIP;
-      bool isRaining = (millis() - lastTipTime < rainTimeout || intuitiveRain > 2095);
-      int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
-
-      Blynk.virtualWrite(V8, rainfall);
-      Blynk.virtualWrite(V9, intuitiveRain);
-      Blynk.virtualWrite(V12, lockout);
-      
-      Blynk.run();
-      delay(1000);
-      Serial.println("✅ Sync Complete.");
-    }
-
-    Blynk.disconnect(); 
-    Serial.println("💤 Disconnected from Blynk.");
-    logToGoogleSheets();
-  }
+void syncNTP() {
+  configTime(28800, 0, "pool.ntp.org", "time.google.com");
+  struct tm t; if (getLocalTime(&t, 1000)) ntpSynced = true;
 }
 
-// ================== MONITOR (SERIAL) ==================
-void monitorStatus() {
-  float rainfall = tipCount * RAIN_PER_TIP;
-  int sensorVal = analogRead(RAIN_SENSOR_PIN);
-  
-  Serial.print("Rain: "); Serial.print(rainfall); 
-  Serial.print("mm | Probe: "); Serial.println(sensorVal);
-}
-
-// ================== MIDNIGHT RESET ==================
-void checkMidnightReset() {
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo) && timeinfo.tm_hour == 0 && timeinfo.tm_min == 0) {
-    if (lastResetDay != timeinfo.tm_mday) {
-      lastResetDay = timeinfo.tm_mday;
-      tipCount = 0;
-      lastPublishHour = -1;
-
-      Serial.println("📤 [MIDNIGHT] Resetting Rain Data...");
-      Blynk.connect();
-      unsigned long start = millis();
-      while (!Blynk.connected() && millis() - start < 10000) {
-        Blynk.run();
-        delay(100);
-      }
-
-      if (Blynk.connected()) {
-        Blynk.virtualWrite(V8, 0);
-        Blynk.virtualWrite(V12, 0);
-        Blynk.run();
-        delay(1000);
-        Serial.println("🔄 Daily Rainfall reset to 0.");
-      } else {
-        Serial.println("⚠️ Midnight Reset FAILED — Token might be busy.");
-      }
-
-      Blynk.disconnect(); // Failsafe
-      Serial.println("💤 Disconnected from Blynk.");
-    }
-  }
-}
-
-// ================== SYSTEM TASKS ==================
-bool ntpSynced = false;
-
-void checkSystem() {
-  wl_status_t wifiStatus = WiFi.status();
-
-  if (wifiStatus == WL_CONNECTED) {
+void checkWiFi() {
+  wl_status_t s = WiFi.status();
+  if (s == WL_CONNECTED) {
     digitalWrite(WIFI_LED_PIN, HIGH);
-    if (!ntpSynced) {
-      configTime(28800, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
-      struct tm t;
-      if (getLocalTime(&t, 5000)) {
-        Serial.printf("✅ [NTP] Masa sync: %02d:%02d:%02d\n", t.tm_hour, t.tm_min, t.tm_sec);
-        ntpSynced = true;
-      } else {
-        Serial.println("⚠️ [NTP] Masih gagal — akan cuba lagi.");
-      }
-    }
-  } else if (wifiStatus == WL_IDLE_STATUS) {
-    Serial.println("📶 WiFi sedang connecting... tunggu.");
-  } else {
-    ntpSynced = false;
-    digitalWrite(WIFI_LED_PIN, LOW);
-    Serial.printf("📶 WiFi lost (status=%d) — reconnecting...\n", wifiStatus);
-    // Remove aggressive disconnect(true)
+    if (!ntpSynced) syncNTP();
+  } else if (s == WL_DISCONNECTED || s == WL_NO_SSID_AVAIL || s == WL_CONNECT_FAILED) {
+    digitalWrite(WIFI_LED_PIN, LOW); ntpSynced = false;
     WiFi.begin(ssid, pass);
   }
 }
 
-// ================== SETUP ==================
+void scheduledPublish() {
+  struct tm ti; if (!getLocalTime(&ti)) return;
+  int h = ti.tm_hour; int m = ti.tm_min;
+
+  bool inWindow = ( (h == 7 && m >= 15 && m <= 30) || (h == 15 && m >= 15 && m <= 30) );
+  if (inWindow && !wdtActive) { esp_task_wdt_add(NULL); wdtActive = true; }
+  else if (!inWindow && wdtActive) { esp_task_wdt_delete(NULL); wdtActive = false; }
+
+  if ((h == 7 && m == 25) || (h == 15 && m == 25)) {
+    if (h != lastPublishH) {
+      lastPublishH = h;
+      float rainfall = tipCount * RAIN_PER_TIP;
+      int intuitive = 4095 - analogRead(RAIN_SENSOR_PIN);
+      bool isRaining = (millis() - lastTipTime < rainTimeout || intuitive > 2095);
+      int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
+      updateBlynkSilent("V8=" + String(rainfall, 2) + "&V9=" + String(intuitive) + "&V12=" + String(lockout));
+    }
+  }
+}
+
+void checkMidnightReset() {
+  struct tm ti; if (getLocalTime(&ti) && ti.tm_hour == 0 && ti.tm_min == 0) {
+    if (lastResetDay != ti.tm_mday) {
+      lastResetDay = ti.tm_mday; tipCount = 0; lastPublishH = -1;
+      updateBlynkSilent("V8=0&V12=0");
+    }
+  }
+}
+
 void setup() {
   Serial.begin(115200);
+  pinMode(REED_PIN, INPUT_PULLUP); attachInterrupt(digitalPinToInterrupt(REED_PIN), handleTip, FALLING);
+  pinMode(RAIN_SENSOR_PIN, INPUT); pinMode(WIFI_LED_PIN, OUTPUT);
 
-  pinMode(REED_PIN, INPUT_PULLUP);
-  pinMode(RAIN_SENSOR_PIN, INPUT);
-  pinMode(WIFI_LED_PIN, OUTPUT);
-
-  Serial.println("[SETUP] Connecting to WiFi: " + String(ssid));
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, pass);
-  
+  WiFi.mode(WIFI_STA); WiFi.begin(ssid, pass);
   Blynk.config(BLYNK_AUTH_TOKEN);
-  configTime(28800, 0, "pool.ntp.org", "time.google.com");
 
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = 300000, .idle_core_mask = 0, .trigger_panic = true
-  };
-  esp_task_wdt_reconfigure(&wdt_config);
-  // esp_task_wdt_add(NULL); -> Moved to dynamic window in checkScheduledPublish()
+  esp_task_wdt_config_t twdt_config = { .timeout_ms = 300000, .idle_core_mask = 0, .trigger_panic = true };
+  esp_task_wdt_reconfigure(&twdt_config);
 
-  attachInterrupt(digitalPinToInterrupt(REED_PIN), handleTip, FALLING);
-
-  timer.setInterval(10000L, monitorStatus);
-  timer.setInterval(10000L, checkSystem);
-  timer.setInterval(30000L, checkScheduledPublish);
-  timer.setInterval(30000L, checkMidnightReset);
+  timer.setInterval(30000L, checkWiFi);
+  timer.setInterval(60000L, scheduledPublish);
+  timer.setInterval(60000L, checkMidnightReset);
 }
 
 void loop() {
-  if (Blynk.connected()) Blynk.run();
   timer.run();
   if (wdtActive) esp_task_wdt_reset();
 }
