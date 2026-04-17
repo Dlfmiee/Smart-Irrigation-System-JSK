@@ -172,6 +172,10 @@ void fetchRemoteStatus() {
 }
 
 BLYNK_WRITE(V0)  { flowE = param.asFloat(); }
+BLYNK_WRITE(V3)  { v3_open = param.asInt(); Serial.printf("[PUMP] Valve C updated: %d\n", v3_open); evaluatePumpState(); }
+BLYNK_WRITE(V4)  { v4_open = param.asInt(); Serial.printf("[PUMP] Valve D updated: %d\n", v4_open); evaluatePumpState(); }
+BLYNK_WRITE(V5)  { v5_open = param.asInt(); Serial.printf("[PUMP] Valve A updated: %d\n", v5_open); evaluatePumpState(); }
+BLYNK_WRITE(V6)  { v6_open = param.asInt(); Serial.printf("[PUMP] Valve B updated: %d\n", v6_open); evaluatePumpState(); }
 BLYNK_WRITE(V13) { pumpMode = param.asInt(); evaluatePumpState(); }
 
 BLYNK_CONNECTED() { Blynk.syncVirtual(V13); timer.setTimeout(2000L, evaluatePumpState); }
