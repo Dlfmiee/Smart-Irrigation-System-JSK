@@ -79,8 +79,9 @@ void checkScheduledPublish() {
   int minute = timeinfo.tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  bool inWindow = ( (hour == 7 && minute >= 22 && minute <= 37) || 
-                    (hour == 15 && minute >= 22 && minute <= 37) );
+  // WDT MUST arm before Stage 1 connection (Starts minute 15, ends minute 30)
+  bool inWindow = ( (hour == 7 && minute >= 15 && minute <= 30) || 
+                    (hour == 15 && minute >= 15 && minute <= 30) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);

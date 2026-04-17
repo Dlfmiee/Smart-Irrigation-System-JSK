@@ -1,6 +1,7 @@
 #define BLYNK_TEMPLATE_ID "TMPL6AgU8jm-x"
 #define BLYNK_TEMPLATE_NAME "ESP32 WIFI"
 #define BLYNK_AUTH_TOKEN "0KNXTFlc_VB9gjyoIvLR8EbaNkYU6t7-"
+#define BLYNK_PRINT Serial
 
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -10,6 +11,7 @@
 #include <time.h>
 
 const char* googleScriptUrl = "https://script.google.com/macros/s/AKfycbw6NvqTFViBKepVJR1U8h83tk3qDTgYXf08oPubvSgFoqx4YWgLtQ71HhUk0xqkdrty/exec";
+const char* pumpAuthToken = "eH9Lhet9x07gktcVE0WDb86JoqQD0Cj4"; // DTBuddy Pump Node
 
 char ssid[] = "WiFi JSK";
 char pass[] = "vhwau35565";
@@ -18,81 +20,101 @@ char pass[] = "vhwau35565";
 #define WIFI_LED_PIN 2  // Built-in Blue LED: ON = WiFi connected, OFF = disconnected
 #define LED_PIN 26      // External LED: blinks on power-on only
 
-volatile int pulseCount = 0;
+volatile uint32_t pulseCount = 0;
 float flowRate = 0;
-float lastFlowRate = -1; 
+float lastFlowRate = -1.0; 
 volatile unsigned long lastPulseTime = 0; 
+unsigned long lastBlynkPublish = 0; // Manual timer for Blynk App
 bool wdtActive = false; // Global watchdog state
 BlynkTimer timer;
-int lastReportDay = -1;
-int lastReportSlot = -1;
-int lastSentMinute = -1; // Minute-latch for One-Shot reporting
 
 void IRAM_ATTR pulseCounter() {
   pulseCount++;
   lastPulseTime = millis();
 }
 
+void updatePumpNode(float rate) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    // Push directly to Pump Node (DTBuddy) for Dry-Run Protection
+    String url = "http://blynk.cloud/external/api/update?token=" + String(pumpAuthToken) + "&V0=" + String(rate, 3);
+    http.begin(url);
+    http.GET();
+    http.end();
+  }
+}
+
 void sendFlowRate() {
   noInterrupts();
-  int count = pulseCount;
+  uint32_t count = pulseCount;
   pulseCount = 0;
   interrupts();
 
-  // Calculation for 5-second interval:
+  // Calculation for 5-second sampling:
+  // pulses / 7.5 = L/min if measured for 60s. 
+  // For 5s (1/12th of a minute), multiply by 12.0
   float flow_L_per_min = (count / 7.5) * 12.0; 
   flowRate = flow_L_per_min / 60.0;  // Convert to L/sec
 
-  time_t now = time(nullptr);
-  struct tm* timeinfo = localtime(&now);
+  Serial.printf("[FLOW] Rate: %.3f L/sec\n", flowRate);
+
+  // 1. SAFETY: Always push to Pump Node for Dry-Run protection
+  // Massive Optimization: Stop spamming the server with "0" all night long!
+  // It will now only push if water is running, or if it JUST stopped.
+  static float lastPushedFlow = -10.0;
+  if (flowRate > 0.01 || abs(flowRate - lastPushedFlow) > 0.01) {
+    updatePumpNode(flowRate); 
+    lastPushedFlow = flowRate;
+  }
+
+  // 2. LOGGING: Periodic Sheets update
+  // (Handled by separate timer, but we update the flowRate variable here)
+
+  // 3. APPS: Check Schedule & Report to Blynk App
+  time_t now_t = time(nullptr);
+  struct tm* timeinfo = localtime(&now_t);
   int hour = timeinfo->tm_hour;
   int minute = timeinfo->tm_min;
 
-  Serial.print("[FLOW] Rate: ");
-  Serial.print(flowRate, 3);
-  Serial.println(" L/sec");
-
-  // Define Windows (Starts 5m before process, ends 1m after)
+  // Window check: 5m before to 1m after cycles
   bool inMorningWindow = (hour == 7 && minute >= 55) || (hour == 8 && minute <= 31);
   bool inAfternoonWindow = (hour == 15 && minute >= 55) || (hour == 16 && minute <= 31);
   bool inActiveWindow = inMorningWindow || inAfternoonWindow;
 
-  // --- WINDOWED WATCHDOG LOGIC ---
+  // Watchdog Management
   if (inActiveWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
     wdtActive = true;
-    Serial.println("🛡️ [WATCHDOG] Armed for Irrigation Window.");
+    Serial.println("🛡️ [WATCHDOG] Armed for cycle.");
   } else if (!inActiveWindow && wdtActive) {
     esp_task_wdt_delete(NULL);
     wdtActive = false;
-    Serial.println("🔓 [WATCHDOG] Disarmed (Idle Mode).");
+    Serial.println("🔓 [WATCHDOG] Disarmed.");
   }
 
   if (inActiveWindow) {
-    static unsigned long lastBlynkPublish = 0;
+    if (!Blynk.connected()) Blynk.connect();
     
-    // Connect if not connected during window
-    if (!Blynk.connected()) {
-      Serial.println("🌐 [WINDOW] Opening Blynk connection for active monitoring...");
-      Blynk.connect();
-    }
+    // Publish every 30 seconds OR if flow just stopped
+    bool isTime = (millis() - lastBlynkPublish >= 30000);
+    bool suddenStop = (flowRate < 0.001 && lastFlowRate > 0.001);
 
-    // Publish every 30 seconds
-    if (millis() - lastBlynkPublish >= 30000) {
+    if (isTime || suddenStop) {
       if (Blynk.connected()) {
         Blynk.virtualWrite(V0, flowRate);
-        Serial.println("📤 [LIVE] Flow data sent (30s interval)");
         lastBlynkPublish = millis();
+        lastFlowRate = flowRate;
+        Serial.println("📤 [LIVE] Flow data sent (30s interval)");
       }
     }
   } else {
-    // Outside window - Ensure we are disconnected
+    // Outside window: Disconnect to save data/prevent flooding
     if (Blynk.connected()) {
-      Serial.println("💤 [WINDOW END] Sending final reset and disconnecting...");
-      Blynk.virtualWrite(V0, 0); // Failsafe reset
+      Blynk.virtualWrite(V0, 0); 
       Blynk.run();
       delay(500);
       Blynk.disconnect();
+      Serial.println("💤 Cycle finished. Blynk disconnected.");
     }
   }
 }

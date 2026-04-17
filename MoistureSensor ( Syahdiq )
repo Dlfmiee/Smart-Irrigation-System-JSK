@@ -51,7 +51,7 @@ bool shouldPublishToBlynk() {
   
   int hour = timeinfo->tm_hour;
   int minute = timeinfo->tm_min;
-  int day = timeinfo->tm_yday;
+  static int lastPublishHour = -1;
   
   // Stage 1: Connect 5m early (07:26 / 15:26)
   bool isPrepTime = ( (hour == 7 && minute == 26) || (hour == 15 && minute == 26) );
@@ -67,8 +67,8 @@ bool shouldPublishToBlynk() {
   bool is7_31 = (hour == 7 && minute == 31);
   bool is15_31 = (hour == 15 && minute == 31);
   
-  if ((is7_31 || is15_31) && day != lastPublishDay) {
-    lastPublishDay = day;
+  if ((is7_31 || is15_31) && hour != lastPublishHour) {
+    lastPublishHour = hour;
     return true;
   }
   
@@ -133,8 +133,9 @@ void scheduledBlynkPublish() {
   int minute = timeinfo->tm_min;
 
   // --- WINDOWED WATCHDOG LOGIC ---
-  bool inWindow = ( (hour == 7 && minute >= 37 && minute <= 45) || 
-                    (hour == 15 && minute >= 37 && minute <= 45) );
+  // WDT MUST arm before Stage 1 connection (Starts minute 24, ends minute 35)
+  bool inWindow = ( (hour == 7 && minute >= 24 && minute <= 35) || 
+                    (hour == 15 && minute >= 24 && minute <= 35) );
 
   if (inWindow && !wdtActive) {
     esp_task_wdt_add(NULL);
@@ -198,16 +199,6 @@ void sendMoistureToBlynk() {
     Serial.println("[BLYNK] Sent moisture %.");
   } else {
     Serial.println("[DELTA] No change, skipping Blynk.");
-  }
-
-  // Rain lockout: Only trigger if soil is very wet (>85%)
-  if (avgPercent > 85) {
-    Blynk.virtualWrite(V12, 1);
-    Serial.println("Soil saturated (>85%)! Rain Lockout ON.");
-  } else {
-    // Automatically turn OFF lockout when soil dries up
-    Blynk.virtualWrite(V12, 0); 
-    Serial.println("Soil moisture OK. Rain Lockout OFF.");
   }
 }
 
