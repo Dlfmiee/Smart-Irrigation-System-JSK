@@ -91,13 +91,13 @@ void evaluatePumpState() {
 void startPump() {
   if (pumpRunning || pumpError) return;
   if (millis() - lastPumpAction < 5000) { timer.setTimeout(5100L, evaluatePumpState); return; }
-  digitalWrite(relayPin, LOW); digitalWrite(ledPin, HIGH); // LOW = Relay ON for Active-LOW modules
+  digitalWrite(relayPin, HIGH); digitalWrite(ledPin, HIGH); // HIGH = Relay ON for Active-HIGH modules
   pumpRunning = true; lastPumpAction = millis();
   Blynk.virtualWrite(V11, 1);
 }
 
 void stopPump() {
-  digitalWrite(relayPin, HIGH); digitalWrite(ledPin, LOW); // HIGH = Relay OFF for Active-LOW modules
+  digitalWrite(relayPin, LOW); digitalWrite(ledPin, LOW); // LOW = Relay OFF for Active-HIGH modules
   pumpRunning = false; lastPumpAction = millis();
   Blynk.virtualWrite(V11, 0);
 }
@@ -226,7 +226,7 @@ BLYNK_CONNECTED() { Blynk.syncVirtual(V3, V4, V5, V6, V13); timer.setTimeout(200
 void setup() {
   Serial.begin(115200);
   pinMode(relayPin, OUTPUT); pinMode(ledPin, OUTPUT); pinMode(wifiLedPin, OUTPUT);
-  digitalWrite(relayPin, HIGH); // Ensure relay is OFF (Active-LOW) on boot
+  digitalWrite(relayPin, LOW); // Ensure relay is OFF (Active-HIGH) on boot
   stopPump();
 
   WiFi.mode(WIFI_STA);
