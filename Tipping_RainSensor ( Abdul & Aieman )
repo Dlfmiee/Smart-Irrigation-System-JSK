@@ -75,6 +75,7 @@ void scheduledPublish() {
       bool isRaining = (millis() - lastTipTime < rainTimeout || intuitive > 2095);
       int lockout = (isRaining || rainfall >= LOCKOUT_THRESHOLD) ? 1 : 0;
       updateBlynkSilent("V8=" + String(rainfall, 2) + "&V9=" + String(intuitive) + "&V12=" + String(lockout));
+      Serial.printf("[RAIN] Data published: %.2fmm | Lockout: %d\n", rainfall, lockout);
     }
   }
 }

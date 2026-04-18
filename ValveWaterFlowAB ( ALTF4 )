@@ -121,6 +121,7 @@ void openValveB() {
   Blynk.virtualWrite(VPIN_VALVE_B, 1);
   shoutToMasterPump(6, 1);
   valveB_StartTime = millis();
+  Serial.println("[B] Valve B OPEN");
 }
 
 void closeValveB() {
@@ -128,6 +129,7 @@ void closeValveB() {
   Blynk.virtualWrite(VPIN_VALVE_B, 0);
   shoutToMasterPump(6, 0);
   valveB_StartTime = 0;
+  Serial.println("[B] Valve B CLOSED");
 }
 
 void checkFailSafe() {

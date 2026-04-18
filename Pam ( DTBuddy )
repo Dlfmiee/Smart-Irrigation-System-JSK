@@ -185,7 +185,8 @@ void fetchRemoteStatus() {
   getFloat(V2, ecValue, 0.05);
 
   static unsigned long lastLogTime = 0;
-  if (millis() - lastLogTime > 600000 || demand) { // Log every 10 mins OR when demand is active
+  bool demandActive = (v4_open || v6_open); 
+  if (millis() - lastLogTime > 600000 || demandActive) { // Log every 10 mins OR when demand is active
     Serial.printf("📊 [SYNC] Valves:%d%d%d%d | Rain:%d | Moist:%d%% | Tank:%d | EC:%.2f\n", 
                   v5_open, v6_open, v3_open, v4_open, rainLockout, moisturePct, tankFull, ecValue);
     lastLogTime = millis();
