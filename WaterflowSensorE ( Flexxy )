@@ -64,14 +64,16 @@ void sendFlowRate() {
 
   Serial.printf("[FLOW] Rate: %.3f L/sec\n", flowRate);
 
-  static float lastPushedFlow = 0.0;
-  // ChatGPT Improvement: threshold adjusted to 0.005 and 0.02 for noise rejection
-  bool suddenStop = (flowRate < 0.005 && lastPushedFlow > 0.02);
+  static float lastPushedFlowToPump = -1.0;
+  static float lastPushedFlowToDash = -1.0;
   
-  if (flowRate > 0.01 || suddenStop) {
+  // Update Pump (Safety) - only if changed significantly or sudden stop
+  bool suddenStop = (flowRate < 0.005 && lastPushedFlowToPump > 0.02);
+  if (abs(flowRate - lastPushedFlowToPump) > 0.02 || suddenStop) {
     updateBlynkSilent(pumpAuthToken, "V0", String(flowRate, 3)); 
-    lastPushedFlow = flowRate;
+    lastPushedFlowToPump = flowRate;
     if (suddenStop) Serial.println("🚨 [SAFETY] Sudden stop reported to Pump.");
+    else Serial.println("📡 [BRIDGE] Flow updated to Master Pump.");
   }
 
   time_t now_t = time(nullptr);
@@ -91,13 +93,16 @@ void sendFlowRate() {
     Serial.println("🔓 [WATCHDOG] Disarmed.");
   }
 
+  // Update Dashboard - only if in window AND changed significantly
   if (inActiveWindow || suddenStop) {
-    updateBlynkSilent(BLYNK_AUTH_TOKEN, "V0", String(flowRate, 3));
-    lastFlowRate = flowRate; 
-    Serial.println("📤 [LIVE] Flow data sent to Dashboard (30s interval)");
-  } else if (lastFlowRate > 0) {
+    if (abs(flowRate - lastPushedFlowToDash) > 0.01 || suddenStop) {
+      updateBlynkSilent(BLYNK_AUTH_TOKEN, "V0", String(flowRate, 3));
+      lastPushedFlowToDash = flowRate; 
+      Serial.println("📤 [LIVE] Flow data sent to Dashboard.");
+    }
+  } else if (lastPushedFlowToDash > 0) {
     updateBlynkSilent(BLYNK_AUTH_TOKEN, "V0", "0");
-    lastFlowRate = 0;
+    lastPushedFlowToDash = 0;
     Serial.println("💤 Window closed. Final zero sent.");
   }
 }

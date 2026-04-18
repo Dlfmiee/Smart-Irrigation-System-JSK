@@ -75,7 +75,7 @@ void shoutToMasterPump(int vPin, int value) {
   if (WiFi.status() != WL_CONNECTED) return;
   WiFiClientSecure client; client.setInsecure();
   HTTPClient http;
-  String url = "https://blynk.cloud/external/api/update?token=" + String(MASTER_PUMP_TOKEN) + "&v" + String(vPin) + "=" + String(value);
+  String url = "https://blynk.cloud/external/api/update?token=" + String(MASTER_PUMP_TOKEN) + "&V" + String(vPin) + "=" + String(value);
   http.begin(client, url);
   if (http.GET() > 0) Serial.printf("📡 [BRIDGE] Hubungi Master: V%d = %d\n", vPin, value);
   http.end();

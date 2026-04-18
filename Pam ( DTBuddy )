@@ -38,14 +38,14 @@ int pumpMode     = 0;
 float flowE      = 0.0;     
 
 // Valves
-bool v5_open = false; // A
-bool v6_open = false; // B
-bool v3_open = false; // C
-bool v4_open = false; // D
+int v5_open = 0; // A
+int v6_open = 0; // B
+int v3_open = 0; // C
+int v4_open = 0; // D
 
 // Sensors
 float rainfallMm   = 0.0;
-bool  rainLockout  = false;
+int   rainLockout  = 0;
 int   moisturePct  = 0;
 int   tankFull     = 0;
 float ecValue      = 0.0;
@@ -91,14 +91,13 @@ void evaluatePumpState() {
 void startPump() {
   if (pumpRunning || pumpError) return;
   if (millis() - lastPumpAction < 5000) { timer.setTimeout(5100L, evaluatePumpState); return; }
-  digitalWrite(relayPin, HIGH); digitalWrite(ledPin, HIGH);
+  digitalWrite(relayPin, LOW); digitalWrite(ledPin, HIGH); // LOW = Relay ON for Active-LOW modules
   pumpRunning = true; lastPumpAction = millis();
   Blynk.virtualWrite(V11, 1);
 }
 
 void stopPump() {
-  if (!pumpRunning) { digitalWrite(ledPin, LOW); return; }
-  digitalWrite(relayPin, LOW); digitalWrite(ledPin, LOW);
+  digitalWrite(relayPin, HIGH); digitalWrite(ledPin, LOW); // HIGH = Relay OFF for Active-LOW modules
   pumpRunning = false; lastPumpAction = millis();
   Blynk.virtualWrite(V11, 0);
 }
@@ -132,41 +131,65 @@ void logToGoogleSheets() {
 
 void fetchRemoteStatus() {
   if (WiFi.status() != WL_CONNECTED) return;
-  Serial.println("🔄 [SYNC] Fetching remote status from all nodes...");
   WiFiClientSecure client; client.setInsecure();
   HTTPClient http;
 
-  // Sync Valves
+  // Sync Valves (Only write to Blynk if state changed)
   auto fetchAPI = [&](const char* token, const char* vPin, int& outVar, int bVpin) {
     http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(token) + "&" + vPin);
-    if (http.GET() == 200) { outVar = http.getString().toInt(); Blynk.virtualWrite(bVpin, outVar); }
+    if (http.GET() == 200) { 
+      int newVal = http.getString().toInt();
+      if (newVal != outVar) { 
+        outVar = newVal; 
+        Blynk.virtualWrite(bVpin, outVar); 
+      }
+    }
     http.end();
   };
   
-  fetchAPI(ALTF4_TOKEN, "V5", (int&)v5_open, V5);
-  fetchAPI(ALTF4_TOKEN, "V6", (int&)v6_open, V6);
-  fetchAPI(CYBERSPARK_TOKEN, "V3", (int&)v3_open, V3);
-  fetchAPI(CYBERSPARK_TOKEN, "V4", (int&)v4_open, V4);
+  fetchAPI(ALTF4_TOKEN, "V5", v5_open, V5);
+  fetchAPI(ALTF4_TOKEN, "V6", v6_open, V6);
+  fetchAPI(CYBERSPARK_TOKEN, "V3", v3_open, V3);
+  fetchAPI(CYBERSPARK_TOKEN, "V4", v4_open, V4);
   Serial.printf("[SYNC] Valves -> A:%d B:%d C:%d D:%d\n", v5_open, v6_open, v3_open, v4_open);
   
-  // Sync Sensors
-  http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V12");
-  if (http.GET() == 200) { rainLockout = http.getString().toInt(); Blynk.virtualWrite(V12, rainLockout); }
-  http.end();
-  http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V8");
-  if (http.GET() == 200) { rainfallMm = http.getString().toFloat(); Blynk.virtualWrite(V8, rainfallMm); }
-  http.end();
-  http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V7");
-  if (http.GET() == 200) { moisturePct = http.getString().toInt(); Blynk.virtualWrite(V7, moisturePct); }
-  http.end();
-  http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V1");
-  if (http.GET() == 200) { tankFull = http.getString().toInt(); Blynk.virtualWrite(V1, tankFull); }
-  http.end();
-  http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V2");
-  if (http.GET() == 200) { ecValue = http.getString().toFloat(); Blynk.virtualWrite(V2, ecValue); }
-  http.end();
-  Serial.printf("[SYNC] Sensors -> Rain:%d Rainfall:%.2fmm Moisture:%d%% Tank:%d EC:%.2f\n", rainLockout, rainfallMm, moisturePct, tankFull, ecValue);
-  Serial.println("✅ [SYNC] Remote fetch complete. Evaluating pump...");
+  // Sync Sensors (Only write to Blynk if state changed significant amount)
+  auto getFloat = [&](int bVpin, float& outVar, float delta) {
+    http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V" + String(bVpin==V12?12:bVpin==V8?8:bVpin==V7?7:bVpin==V1?1:2));
+    if (http.GET() == 200) {
+      float newVal = http.getString().toFloat();
+      if (abs(newVal - outVar) > delta) {
+        outVar = newVal;
+        Blynk.virtualWrite(bVpin, outVar);
+      }
+    }
+    http.end();
+  };
+
+  auto getInt = [&](int bVpin, int& outVar) {
+    http.begin(client, "https://blynk.cloud/external/api/get?token=" + String(SENSOR_TOKEN) + "&V" + String(bVpin==V12?12:bVpin==V7?7:bVpin==V1?1:2));
+    if (http.GET() == 200) {
+      int newVal = http.getString().toInt();
+      if (newVal != outVar) {
+        outVar = newVal;
+        Blynk.virtualWrite(bVpin, outVar);
+      }
+    }
+    http.end();
+  };
+
+  getInt(V12, rainLockout);
+  getFloat(V8, rainfallMm, 0.1);
+  getInt(V7, moisturePct);
+  getInt(V1, tankFull);
+  getFloat(V2, ecValue, 0.05);
+
+  static unsigned long lastLogTime = 0;
+  if (millis() - lastLogTime > 600000 || demand) { // Log every 10 mins OR when demand is active
+    Serial.printf("📊 [SYNC] Valves:%d%d%d%d | Rain:%d | Moist:%d%% | Tank:%d | EC:%.2f\n", 
+                  v5_open, v6_open, v3_open, v4_open, rainLockout, moisturePct, tankFull, ecValue);
+    lastLogTime = millis();
+  }
 
   evaluatePumpState(); 
 }
@@ -178,11 +201,12 @@ BLYNK_WRITE(V5)  { v5_open = param.asInt(); Serial.printf("[PUMP] Valve A update
 BLYNK_WRITE(V6)  { v6_open = param.asInt(); Serial.printf("[PUMP] Valve B updated: %d\n", v6_open); evaluatePumpState(); }
 BLYNK_WRITE(V13) { pumpMode = param.asInt(); evaluatePumpState(); }
 
-BLYNK_CONNECTED() { Blynk.syncVirtual(V13); timer.setTimeout(2000L, evaluatePumpState); }
+BLYNK_CONNECTED() { Blynk.syncVirtual(V3, V4, V5, V6, V13); timer.setTimeout(2000L, evaluatePumpState); }
 
 void setup() {
   Serial.begin(115200);
   pinMode(relayPin, OUTPUT); pinMode(ledPin, OUTPUT); pinMode(wifiLedPin, OUTPUT);
+  digitalWrite(relayPin, HIGH); // Ensure relay is OFF (Active-LOW) on boot
   stopPump();
 
   WiFi.mode(WIFI_STA);
@@ -195,7 +219,7 @@ void setup() {
 
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(15000L, reconnectBlynk);
-  timer.setInterval(60000L, fetchRemoteStatus); 
+  timer.setInterval(300000L, fetchRemoteStatus); 
   timer.setInterval(300000L, logToGoogleSheets); 
 }
 
