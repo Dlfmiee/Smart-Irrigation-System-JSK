@@ -220,8 +220,8 @@ void setup() {
 
   timer.setInterval(10000L, checkWiFi);
   timer.setInterval(15000L, reconnectBlynk);
-  timer.setInterval(300000L, fetchRemoteStatus); 
-  timer.setInterval(300000L, logToGoogleSheets); 
+  timer.setInterval(600000L, fetchRemoteStatus); 
+  timer.setInterval(600000L, logToGoogleSheets); 
 }
 
 void loop() {
