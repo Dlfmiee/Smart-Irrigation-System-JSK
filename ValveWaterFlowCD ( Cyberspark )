@@ -113,6 +113,7 @@ void closeValveC() {
   Blynk.virtualWrite(VPIN_VALVE_C, 0);
   shoutToMasterPump(3, 0);
   valveC_StartTime = 0;
+  Serial.println("[C] Valve C CLOSED");
 }
 
 void openValveD() {
