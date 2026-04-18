@@ -131,6 +131,25 @@ void logToGoogleSheets() {
 
 void fetchRemoteStatus() {
   if (WiFi.status() != WL_CONNECTED) return;
+
+  // Smart Sync Savings: Only poll every 10 mins during "Active Windows" or when a valve is running.
+  // Otherwise, poll only once every hour to save Blynk message quota.
+  static int offPeakSkipCount = 0;
+  struct tm ti;
+  bool activeWindow = false;
+  bool valveDemand = (v5_open || v6_open || v3_open || v4_open);
+  
+  if (getLocalTime(&ti)) {
+    int h = ti.tm_hour;
+    activeWindow = ( (h >= 7 && h <= 9) || (h >= 15 && h <= 17) );
+  }
+
+  if (!activeWindow && !valveDemand) {
+    offPeakSkipCount++;
+    if (offPeakSkipCount < 6) return; // Skip 6 cycles (60 mins) off-peak
+  }
+  offPeakSkipCount = 0;
+
   WiFiClientSecure client; client.setInsecure();
   HTTPClient http;
 
